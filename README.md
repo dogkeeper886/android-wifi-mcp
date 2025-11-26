@@ -203,9 +203,10 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 
 ### Install Companion App
 
-1. **Build the APK** (requires Android SDK):
+1. **Build the APK** (requires Android SDK and Gradle):
    ```bash
    cd companion-app
+   gradle wrapper        # Generate wrapper (first time only)
    ./gradlew assembleDebug
    ```
 
