@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WiFi MCP Companion</string>
+    <string name="status_ready">Ready for enterprise WiFi operations</string>
+    <string name="status_connecting">Connecting to enterprise WiFi...</string>
+    <string name="status_connected">Connected successfully</string>
+    <string name="status_error">Error: %1$s</string>
+    <string name="permissions_required">Location permission is required for WiFi operations</string>
+    <string name="grant_permission">Grant Permission</string>
+</resources>

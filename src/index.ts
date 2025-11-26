@@ -4,7 +4,8 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 import { DeviceManager } from './adb/device-manager.js';
 import { NetworkCheck } from './network/network-check.js';
-import { SecurityType } from './types.js';
+import { EnterpriseWifiCommands } from './adb/enterprise-wifi.js';
+import { SecurityType, EapMethod, Phase2Method } from './types.js';
 
 const app = express();
 app.use(express.json());
@@ -343,6 +344,172 @@ mcpServer.tool(
         {
           type: 'text',
           text: `Forgot network with ID ${networkId}`,
+        },
+      ],
+    };
+  }
+);
+
+// ============ Enterprise WiFi Tools (802.1X/EAP) ============
+
+mcpServer.tool(
+  'wifi_connect_enterprise',
+  'Connect to 802.1X enterprise WiFi (EAP-PEAP/TTLS/TLS). Requires companion app.',
+  {
+    ssid: z.string().describe('Network SSID'),
+    eapMethod: z.enum(['peap', 'ttls', 'tls']).describe('EAP method'),
+    identity: z.string().describe('Username or email for authentication'),
+    domainSuffixMatch: z.string().describe('RADIUS server domain (e.g., radius.corp.com)'),
+    phase2Method: z
+      .enum(['mschapv2', 'pap', 'gtc', 'none'])
+      .optional()
+      .default('mschapv2')
+      .describe('Phase 2 authentication method (for PEAP/TTLS)'),
+    password: z.string().optional().describe('Password (required for PEAP/TTLS)'),
+    anonymousIdentity: z.string().optional().describe('Anonymous outer identity'),
+    caCertificate: z.string().optional().describe('CA certificate (base64-encoded PEM)'),
+    clientCertificate: z.string().optional().describe('Client certificate for EAP-TLS (base64-encoded PEM)'),
+    privateKey: z.string().optional().describe('Private key for EAP-TLS (base64-encoded PEM)'),
+    privateKeyPassword: z.string().optional().describe('Private key password (if encrypted)'),
+  },
+  async (params) => {
+    await ensureDevice();
+    const enterpriseWifi = new EnterpriseWifiCommands(deviceManager.getAdbClient());
+
+    const result = await enterpriseWifi.connectEnterprise({
+      ssid: params.ssid,
+      eapMethod: params.eapMethod as EapMethod,
+      phase2Method: params.phase2Method as Phase2Method,
+      identity: params.identity,
+      password: params.password,
+      anonymousIdentity: params.anonymousIdentity,
+      domainSuffixMatch: params.domainSuffixMatch,
+      caCertificate: params.caCertificate,
+      clientCertificate: params.clientCertificate,
+      privateKey: params.privateKey,
+      privateKeyPassword: params.privateKeyPassword,
+    });
+
+    if (result.success) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                ssid: result.ssid,
+                eapMethod: result.eapMethod,
+                message: 'Connected to enterprise WiFi successfully',
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } else {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                ssid: result.ssid,
+                eapMethod: result.eapMethod,
+                error: result.error,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+mcpServer.tool(
+  'wifi_install_certificate',
+  'Install a CA or client certificate for enterprise WiFi. Requires companion app.',
+  {
+    certificate: z.string().describe('Certificate content (base64-encoded PEM or DER)'),
+    alias: z.string().describe('Friendly name for the certificate'),
+    type: z.enum(['ca', 'client']).describe('Certificate type'),
+  },
+  async ({ certificate, alias, type }) => {
+    await ensureDevice();
+    const enterpriseWifi = new EnterpriseWifiCommands(deviceManager.getAdbClient());
+
+    const result = await enterpriseWifi.installCertificate(certificate, alias, type);
+
+    if (result.success) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                alias: result.alias,
+                type: result.type,
+                message: `Certificate "${alias}" installed successfully`,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+      };
+    } else {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                alias: result.alias,
+                type: result.type,
+                error: result.error,
+              },
+              null,
+              2
+            ),
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+);
+
+mcpServer.tool(
+  'wifi_check_companion_app',
+  'Check if the enterprise WiFi companion app is installed',
+  {},
+  async () => {
+    await ensureDevice();
+    const enterpriseWifi = new EnterpriseWifiCommands(deviceManager.getAdbClient());
+    const installed = await enterpriseWifi.isCompanionAppInstalled();
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify(
+            {
+              companionAppInstalled: installed,
+              packageName: 'com.example.wifimcpcompanion',
+              message: installed
+                ? 'Companion app is installed and ready for enterprise WiFi'
+                : 'Companion app not installed. Please install it to use enterprise WiFi features.',
+            },
+            null,
+            2
+          ),
         },
       ],
     };

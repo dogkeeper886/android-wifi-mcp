@@ -55,19 +55,36 @@ export interface WifiConnectionResult {
   error?: string;
 }
 
-// EAP Types (for companion app)
-export type EapMethod = 'PEAP' | 'TTLS' | 'TLS' | 'PWD';
-export type Phase2Method = 'MSCHAPV2' | 'PAP' | 'GTC' | 'NONE';
+// EAP Types (for 802.1X enterprise WiFi via companion app)
+export type EapMethod = 'peap' | 'ttls' | 'tls';
+export type Phase2Method = 'mschapv2' | 'pap' | 'gtc' | 'none';
 
 export interface EapConfig {
   ssid: string;
   eapMethod: EapMethod;
-  phase2Method: Phase2Method;
-  identity: string;
-  password?: string;
-  anonymousIdentity?: string;
-  caCertificate?: string;  // Base64 encoded
-  clientCertificate?: string;  // Base64 encoded (for TLS)
+  phase2Method?: Phase2Method;       // Required for PEAP/TTLS
+  identity: string;                  // Username/email
+  password?: string;                 // For PEAP/TTLS
+  anonymousIdentity?: string;        // Outer identity (optional)
+  domainSuffixMatch: string;         // Required for Android 11+
+  caCertificate?: string;            // Base64-encoded PEM or file path
+  clientCertificate?: string;        // Base64-encoded PEM (for EAP-TLS)
+  privateKey?: string;               // Base64-encoded PEM (for EAP-TLS)
+  privateKeyPassword?: string;       // If private key is encrypted
+}
+
+export interface EnterpriseConnectionResult {
+  success: boolean;
+  ssid: string;
+  eapMethod: EapMethod;
+  error?: string;
+}
+
+export interface CertificateInstallResult {
+  success: boolean;
+  alias: string;
+  type: 'ca' | 'client';
+  error?: string;
 }
 
 // Network Diagnostics Types

@@ -156,25 +156,29 @@ export class WifiCommands {
     security: SecurityType,
     password?: string
   ): Promise<WifiConnectionResult> {
-    let command = `cmd wifi connect-network "${ssid}" ${security}`;
+    // Use escaped quotes to survive shell processing
+    let command = `cmd wifi connect-network '"${ssid}"' ${security}`;
     if (password && security !== 'open') {
-      command += ` "${password}"`;
+      command += ` '"${password}"'`;
     }
 
     const result = await this.adb.shell(command);
 
-    if (!result.success || result.stdout.toLowerCase().includes('error')) {
+    // Check for explicit WiFi error messages in stdout only
+    // (stderr may contain generic "Command failed" from non-zero exit code which is normal)
+    const stdout = result.stdout.toLowerCase();
+    if (stdout.includes('error') || stdout.includes('invalid') || stdout.includes('unknown network')) {
       return {
         success: false,
         ssid,
-        error: result.stderr || result.stdout || 'Connection failed',
+        error: result.stdout || 'Connection failed',
       };
     }
 
     // Wait for connection to establish
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    // Verify connection
+    // Verify connection by checking actual status
     const status = await this.getStatus();
     const connected = status.connected && status.ssid === ssid;
 
@@ -225,24 +229,31 @@ export class WifiCommands {
 
   /**
    * Parse saved networks from cmd wifi output
+   * Format: Network Id      SSID                         Security type
+   *         0            Tuesday Blue                     open
+   *         3            Wednesday - SAE                  wpa3-sae^
    */
   private parseSavedNetworks(output: string): SavedNetwork[] {
     const networks: SavedNetwork[] = [];
     const lines = output.split('\n');
+    const seen = new Set<number>();
 
     for (const line of lines) {
       const trimmed = line.trim();
-      if (!trimmed) continue;
+      if (!trimmed || trimmed.startsWith('Network Id')) continue;
 
-      // Format varies: "Network ID: X SSID: Y" or just "id ssid"
-      const idMatch = trimmed.match(/(?:Network\s+)?ID:?\s*(\d+)/i);
-      const ssidMatch = trimmed.match(/SSID:?\s*["']?([^"'\n]+)["']?/i);
+      // Parse: ID  SSID  SecurityType
+      // ID is at the start, security type is at the end (open|owe|wpa2-psk|wpa3-sae etc)
+      const match = trimmed.match(/^(\d+)\s+(.+?)\s+(open|owe|wpa\d?-\S+|wep)(\^?)$/i);
+      if (match) {
+        const networkId = parseInt(match[1], 10);
+        const ssid = match[2].trim();
 
-      if (idMatch) {
-        networks.push({
-          networkId: parseInt(idMatch[1], 10),
-          ssid: ssidMatch ? ssidMatch[1].trim() : 'Unknown',
-        });
+        // Each network appears twice (once per security type), only add once
+        if (!seen.has(networkId)) {
+          seen.add(networkId);
+          networks.push({ networkId, ssid });
+        }
       }
     }
 

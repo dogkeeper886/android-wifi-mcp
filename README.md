@@ -8,6 +8,7 @@ This server enables Claude and other MCP clients to remotely control WiFi connec
 
 - **WiFi Control**: Scan, connect, disconnect, enable/disable WiFi
 - **Network Types**: Open, OWE, WPA2-PSK, WPA3-SAE support
+- **802.1X Enterprise WiFi**: EAP-PEAP, EAP-TTLS, EAP-TLS support (requires companion app)
 - **Multi-Device**: Manage multiple connected Android devices
 - **Network Diagnostics**: Ping, DNS lookup, internet connectivity, captive portal detection
 - **Device Info**: Query device model, Android version, and compatibility
@@ -124,6 +125,14 @@ Or connect via HTTP transport:
 | `wifi_list_networks` | List saved WiFi networks |
 | `wifi_forget` | Forget a saved network |
 
+### Enterprise WiFi (802.1X)
+
+| Tool | Description |
+|------|-------------|
+| `wifi_connect_enterprise` | Connect to 802.1X WiFi (PEAP/TTLS/TLS) |
+| `wifi_install_certificate` | Install CA or client certificate |
+| `wifi_check_companion_app` | Check if companion app is installed |
+
 ### Network Diagnostics
 
 | Tool | Description |
@@ -180,6 +189,54 @@ This will use `wifi_connect` with:
 | `wpa2` | WPA2-PSK (most common) | Yes |
 | `wpa3` | WPA3-SAE (modern) | Yes |
 
+## Enterprise WiFi (802.1X) Setup
+
+Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd wifi` interface only supports PSK-based authentication.
+
+### Supported EAP Methods
+
+| Method | Description | Credentials |
+|--------|-------------|-------------|
+| EAP-PEAP | Protected EAP with MSCHAPv2 | Username + Password |
+| EAP-TTLS | Tunneled TLS | Username + Password |
+| EAP-TLS | Certificate-based | Client Certificate + Private Key |
+
+### Install Companion App
+
+1. **Build the APK** (requires Android SDK):
+   ```bash
+   cd companion-app
+   ./gradlew assembleDebug
+   ```
+
+2. **Install on device**:
+   ```bash
+   adb install app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+3. **Launch the app** once to grant permissions:
+   ```bash
+   adb shell am start -n com.example.wifimcpcompanion/.MainActivity
+   ```
+
+4. **Verify installation**:
+   ```
+   > Use wifi_check_companion_app to verify the app is installed
+   ```
+
+### Connect to Enterprise WiFi
+
+```
+> Connect to "CorpWiFi" using PEAP with username "user@corp.com" and password "secret"
+```
+
+This will use `wifi_connect_enterprise` with:
+- ssid: "CorpWiFi"
+- eapMethod: "peap"
+- identity: "user@corp.com"
+- password: "secret"
+- domainSuffixMatch: "radius.corp.com" (required for Android 11+)
+
 ## Environment Variables
 
 | Variable | Default | Description |
@@ -221,7 +278,7 @@ where adb  # Windows
 ## Limitations
 
 - **Android 11+ Required**: The `cmd wifi` interface requires Android 11 (SDK 30) or higher
-- **No Enterprise WiFi (yet)**: 802.1X/EAP requires companion app (coming in future version)
+- **Enterprise WiFi Requires Companion App**: 802.1X/EAP authentication needs the companion app installed
 - **USB Required**: Device must be connected via USB with debugging enabled
 - **No Captive Portal Automation**: Can detect but not automate portal login
 
@@ -230,14 +287,18 @@ where adb  # Windows
 ```
 android-wifi-mcp/
 ├── src/
-│   ├── index.ts              # MCP server entry point
-│   ├── types.ts              # TypeScript interfaces
+│   ├── index.ts               # MCP server entry point
+│   ├── types.ts               # TypeScript interfaces
 │   ├── adb/
-│   │   ├── adb-client.ts     # ADB command wrapper
-│   │   ├── device-manager.ts # Multi-device handling
-│   │   └── wifi-commands.ts  # cmd wifi wrapper
+│   │   ├── adb-client.ts      # ADB command wrapper
+│   │   ├── device-manager.ts  # Multi-device handling
+│   │   ├── wifi-commands.ts   # cmd wifi wrapper
+│   │   └── enterprise-wifi.ts # 802.1X enterprise WiFi
 │   └── network/
-│       └── network-check.ts  # Network diagnostics
+│       └── network-check.ts   # Network diagnostics
+├── companion-app/             # Android companion app for 802.1X
+│   ├── app/src/main/kotlin/   # Kotlin source files
+│   └── build.gradle.kts       # Gradle build config
 ├── package.json
 ├── tsconfig.json
 └── README.md
