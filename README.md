@@ -28,6 +28,10 @@ This server enables Claude and other MCP clients to remotely control WiFi connec
 - USB Debugging enabled
 - USB cable connection to host PC
 
+### For Enterprise WiFi (Optional)
+- Android SDK (for building companion app)
+- Gradle 8.x
+
 ## Setup
 
 ### 1. Enable USB Debugging on Android
@@ -47,7 +51,7 @@ adb devices
 
 You should see your device listed as "device" (not "unauthorized" or "offline").
 
-### 3. Install and Run
+### 3. Install and Run MCP Server
 
 ```bash
 cd android-wifi-mcp
@@ -102,6 +106,44 @@ Or connect via HTTP transport:
 }
 ```
 
+### 5. Setup Enterprise WiFi (Optional)
+
+Skip this section if you only need WPA2/WPA3 personal networks.
+
+Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd wifi` interface only supports PSK-based authentication.
+
+#### Supported EAP Methods
+
+| Method | Description | Credentials |
+|--------|-------------|-------------|
+| EAP-PEAP | Protected EAP with MSCHAPv2 | Username + Password |
+| EAP-TTLS | Tunneled TLS | Username + Password |
+| EAP-TLS | Certificate-based | Client Certificate + Private Key |
+
+#### Build and Install Companion App
+
+1. **Build the APK** (requires Android SDK and Gradle):
+   ```bash
+   cd companion-app
+   gradle wrapper        # Generate wrapper (first time only)
+   ./gradlew assembleDebug
+   ```
+
+2. **Install on device**:
+   ```bash
+   adb install app/build/outputs/apk/debug/app-debug.apk
+   ```
+
+3. **Launch the app** once to grant permissions:
+   ```bash
+   adb shell am start -n com.example.wifimcpcompanion/.MainActivity
+   ```
+
+4. **Verify installation**:
+   ```
+   > Use wifi_check_companion_app to verify the app is installed
+   ```
+
 ## Available Tools
 
 ### Device Management
@@ -117,7 +159,7 @@ Or connect via HTTP transport:
 | Tool | Description |
 |------|-------------|
 | `wifi_scan` | Scan for available WiFi networks |
-| `wifi_connect` | Connect to a WiFi network |
+| `wifi_connect` | Connect to a WiFi network (WPA2/WPA3) |
 | `wifi_disconnect` | Disconnect from current network |
 | `wifi_status` | Get current WiFi connection status |
 | `wifi_enable` | Enable WiFi |
@@ -151,7 +193,7 @@ Or connect via HTTP transport:
 > Use device_list to see connected Android devices
 ```
 
-### Connect to WiFi
+### Connect to WiFi (WPA2/WPA3)
 
 ```
 > Connect my phone to the network "HomeWiFi" with password "mypassword123"
@@ -161,6 +203,19 @@ This will use `wifi_connect` with:
 - ssid: "HomeWiFi"
 - security: "wpa2"
 - password: "mypassword123"
+
+### Connect to Enterprise WiFi (802.1X)
+
+```
+> Connect to "CorpWiFi" using PEAP with username "user@corp.com" and password "secret"
+```
+
+This will use `wifi_connect_enterprise` with:
+- ssid: "CorpWiFi"
+- eapMethod: "peap"
+- identity: "user@corp.com"
+- password: "secret"
+- domainSuffixMatch: "radius.corp.com" (required for Android 11+)
 
 ### Check Connection Status
 
@@ -180,7 +235,9 @@ This will use `wifi_connect` with:
 > Check if my phone has internet access and detect any captive portal
 ```
 
-## Security Types
+## Reference
+
+### Security Types
 
 | Type | Use Case | Password Required |
 |------|----------|-------------------|
@@ -189,56 +246,7 @@ This will use `wifi_connect` with:
 | `wpa2` | WPA2-PSK (most common) | Yes |
 | `wpa3` | WPA3-SAE (modern) | Yes |
 
-## Enterprise WiFi (802.1X) Setup
-
-Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd wifi` interface only supports PSK-based authentication.
-
-### Supported EAP Methods
-
-| Method | Description | Credentials |
-|--------|-------------|-------------|
-| EAP-PEAP | Protected EAP with MSCHAPv2 | Username + Password |
-| EAP-TTLS | Tunneled TLS | Username + Password |
-| EAP-TLS | Certificate-based | Client Certificate + Private Key |
-
-### Install Companion App
-
-1. **Build the APK** (requires Android SDK and Gradle):
-   ```bash
-   cd companion-app
-   gradle wrapper        # Generate wrapper (first time only)
-   ./gradlew assembleDebug
-   ```
-
-2. **Install on device**:
-   ```bash
-   adb install app/build/outputs/apk/debug/app-debug.apk
-   ```
-
-3. **Launch the app** once to grant permissions:
-   ```bash
-   adb shell am start -n com.example.wifimcpcompanion/.MainActivity
-   ```
-
-4. **Verify installation**:
-   ```
-   > Use wifi_check_companion_app to verify the app is installed
-   ```
-
-### Connect to Enterprise WiFi
-
-```
-> Connect to "CorpWiFi" using PEAP with username "user@corp.com" and password "secret"
-```
-
-This will use `wifi_connect_enterprise` with:
-- ssid: "CorpWiFi"
-- eapMethod: "peap"
-- identity: "user@corp.com"
-- password: "secret"
-- domainSuffixMatch: "radius.corp.com" (required for Android 11+)
-
-## Environment Variables
+### Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -275,6 +283,12 @@ where adb  # Windows
 - Ensure Android 11+ (`cmd wifi` requires SDK 30+)
 - Check device is not in restricted mode (work profile, etc.)
 - Some Samsung devices may have different behavior
+
+### Enterprise WiFi not working
+
+- Ensure companion app is installed and launched once
+- Check `wifi_check_companion_app` returns success
+- Verify the domain suffix match is correct for your RADIUS server
 
 ## Limitations
 
