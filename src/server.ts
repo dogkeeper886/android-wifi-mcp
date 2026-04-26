@@ -789,5 +789,46 @@ export function createMcpServer(deviceManager: DeviceManager): McpServer {
     }
   );
 
+  // ============ SMS / OTP Tools ============
+
+  mcpServer.tool(
+    'sms_read_recent',
+    'Read recent SMS messages from the device inbox. Optionally filter by sender substring/regex, body regex (with capture group for OTP), or recency. Note: some Samsung/OEM devices restrict content://sms/inbox even via adb shell — the response includes a warning when no rows are returned. Use the companion app notification listener (#3) for those devices.',
+    {
+      limit: z.number().optional().default(10).describe('Max messages to return (default 10)'),
+      senderFilter: z.string().optional().describe('Regex/substring match against the sender (case-insensitive)'),
+      bodyRegex: z.string().optional().describe('Regex match against body. If it has a capture group, the captured text becomes the OTP'),
+      sinceSeconds: z.number().optional().describe('Only return messages received within the last N seconds'),
+    },
+    async ({ limit, senderFilter, bodyRegex, sinceSeconds }) => {
+      await ensureDevice();
+      const sms = deviceManager.getSmsCommands();
+      const result = await sms.readRecent({ limit, senderFilter, bodyRegex, sinceSeconds });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  mcpServer.tool(
+    'sms_wait_for_otp',
+    'Poll the SMS inbox until a matching message arrives or timeout elapses. Returns the extracted OTP string when found. Default timeout 60s, default poll 2s.',
+    {
+      senderFilter: z.string().optional().describe('Regex/substring to match against the sender'),
+      bodyRegex: z.string().optional().describe('Regex against body. If it has a capture group, that becomes the OTP; else first 4-8 digit run is used'),
+      sinceSeconds: z.number().optional().default(60).describe('Initial look-back window for matching messages (default 60s)'),
+      timeoutMs: z.number().optional().default(60000).describe('Max time to wait in milliseconds (default 60000)'),
+      pollIntervalMs: z.number().optional().default(2000).describe('Poll interval in milliseconds (default 2000)'),
+    },
+    async ({ senderFilter, bodyRegex, sinceSeconds, timeoutMs, pollIntervalMs }) => {
+      await ensureDevice();
+      const sms = deviceManager.getSmsCommands();
+      const result = await sms.waitForOtp({ senderFilter, bodyRegex, sinceSeconds, timeoutMs, pollIntervalMs });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
   return mcpServer;
 }

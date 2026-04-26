@@ -209,6 +209,15 @@ OS-level primitives (pixel/UI-tree, not DOM). For browser-page DOM automation, s
 | `device_ui_dump` | Dump the on-screen UI hierarchy as XML |
 | `device_list_packages` | List installed app package names |
 
+### SMS / OTP
+
+Reads SMS messages from `content://sms/inbox` via adb shell — no root, no companion app. **Limitation:** some Samsung/OEM devices restrict the SMS content provider even from adb; the tools return an empty list with a `warning` field on those devices, and the recommended fallback is the notification listener planned in #3.
+
+| Tool | Description |
+|------|-------------|
+| `sms_read_recent` | Read recent SMS, optionally filtered by sender, body regex, or recency |
+| `sms_wait_for_otp` | Poll the inbox until a matching OTP arrives or timeout elapses |
+
 ## Usage Examples
 
 ### List Connected Devices
@@ -274,6 +283,14 @@ This chains `device_launch_app` (target: `com.android.settings`), `device_screen
 ```
 
 Uses `device_open_url` then `device_ui_dump` for OS-level inspection. For DOM-level browser automation see #10.
+
+### Wait for a Login OTP via SMS
+
+```
+> Wait up to 60 seconds for an SMS OTP from "VERIFY" — give me the code as soon as it arrives
+```
+
+Calls `sms_wait_for_otp` with `senderFilter: "VERIFY"` and a 60s timeout. The tool returns the extracted OTP string when a matching message arrives. On devices that restrict the SMS content provider (some Samsung models), see #3 for the notification-listener fallback.
 
 ## Reference
 
@@ -399,6 +416,7 @@ android-wifi-mcp/
 │   │   ├── device-manager.ts   # Multi-device handling
 │   │   ├── wifi-commands.ts    # cmd wifi wrapper
 │   │   ├── ui-commands.ts      # input / am start / screencap / uiautomator
+│   │   ├── sms-commands.ts     # SMS read / OTP polling via content provider
 │   │   └── enterprise-wifi.ts  # 802.1X enterprise WiFi
 │   └── network/
 │       └── network-check.ts    # Network diagnostics
