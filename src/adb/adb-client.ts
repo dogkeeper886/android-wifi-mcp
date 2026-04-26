@@ -197,4 +197,40 @@ export class AdbClient {
       throw new Error(`Timeout waiting for device: ${result.stderr}`);
     }
   }
+
+  /**
+   * Execute an ADB command and capture stdout as a Buffer.
+   * Used for binary streams (e.g. `adb exec-out screencap -p`).
+   */
+  async execBinary(args: string[], timeout: number = 30000): Promise<Buffer> {
+    const deviceArgs = this.selectedDevice ? ['-s', this.selectedDevice] : [];
+    const fullArgs = [...deviceArgs, ...args];
+
+    return new Promise((resolve, reject) => {
+      const proc = spawn(this.adbPath, fullArgs);
+      const chunks: Buffer[] = [];
+      const errChunks: Buffer[] = [];
+
+      const timer = setTimeout(() => {
+        proc.kill('SIGKILL');
+        reject(new Error(`adb ${args.join(' ')} timed out after ${timeout}ms`));
+      }, timeout);
+
+      proc.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+      proc.stderr.on('data', (chunk: Buffer) => errChunks.push(chunk));
+      proc.on('error', (err) => {
+        clearTimeout(timer);
+        reject(err);
+      });
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        if (code === 0) {
+          resolve(Buffer.concat(chunks));
+        } else {
+          const err = Buffer.concat(errChunks).toString().trim();
+          reject(new Error(`adb exited with code ${code}: ${err}`));
+        }
+      });
+    });
+  }
 }

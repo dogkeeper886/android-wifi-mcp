@@ -1,0 +1,22 @@
+id: TC-UI-002
+name: device_keyevent sends KEYCODE_WAKEUP
+suite: ui
+tags: [ui]
+priority: 2
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Wake the screen
+    command: npx tsx cicd/tests/src/mcp-client.ts device_keyevent '{"keycode":"KEYCODE_WAKEUP"}'
+    expectPatterns:
+      - "success.*true"
+      - "KEYCODE_WAKEUP"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify device_keyevent succeeds with a benign keycode.
+  - Tool returns success: true
+  - The dispatched keycode is echoed back
+  - KEYCODE_WAKEUP is harmless — it only wakes the display

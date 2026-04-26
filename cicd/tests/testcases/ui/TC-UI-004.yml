@@ -1,0 +1,30 @@
+id: TC-UI-004
+name: device_screenshot saves a PNG to a host path
+suite: ui
+tags: [ui]
+priority: 4
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Capture a screenshot to /tmp/tc-ui-004.png
+    command: npx tsx cicd/tests/src/mcp-client.ts device_screenshot '{"outputPath":"/tmp/tc-ui-004.png"}'
+    expectPatterns:
+      - "success.*true"
+      - "outputPath.*tc-ui-004"
+      - "bytes"
+    rejectPatterns:
+      - "isError"
+
+  - name: Verify the file is a non-trivial PNG
+    command: test -s /tmp/tc-ui-004.png && file /tmp/tc-ui-004.png
+    expectPatterns:
+      - "PNG image"
+    rejectPatterns:
+      - "empty"
+
+criteria: |
+  Verify device_screenshot writes a PNG file to the host.
+  - Tool returns success: true with the requested outputPath
+  - The file exists, is non-empty, and `file(1)` recognizes it as a PNG
+  - Tests file-output path; base64 path is exercised by ad-hoc smoke

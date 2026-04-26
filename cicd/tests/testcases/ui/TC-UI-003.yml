@@ -1,0 +1,24 @@
+id: TC-UI-003
+name: device_ui_dump returns the on-screen UI hierarchy as XML
+suite: ui
+tags: [ui]
+priority: 3
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Dump the UI hierarchy
+    command: npx tsx cicd/tests/src/mcp-client.ts device_ui_dump '{}'
+    expectPatterns:
+      - "success.*true"
+      - "<hierarchy"
+      - "<node"
+      - "bytes"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify device_ui_dump returns a parsed XML hierarchy.
+  - Tool returns success: true
+  - Response contains a `<hierarchy` root and at least one `<node` element
+  - The bytes field reports a non-trivial dump size

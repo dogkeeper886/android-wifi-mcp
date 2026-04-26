@@ -1,0 +1,23 @@
+id: TC-UI-007
+name: device_type_text dispatches text input
+suite: ui
+tags: [ui]
+priority: 7
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Type a benign string
+    command: npx tsx cicd/tests/src/mcp-client.ts device_type_text '{"text":"hello world"}'
+    expectPatterns:
+      - "success.*true"
+      - "hello world"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify device_type_text forwards the event to `input text`.
+  - Tool returns success: true
+  - The text is echoed back unchanged
+  - If no field is focused on-device, `input text` is a no-op — the test only
+    verifies the tool dispatched successfully

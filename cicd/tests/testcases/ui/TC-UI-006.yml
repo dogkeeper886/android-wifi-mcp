@@ -1,0 +1,24 @@
+id: TC-UI-006
+name: device_swipe dispatches a swipe gesture
+suite: ui
+tags: [ui]
+priority: 6
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Swipe in place at (500, 500) over 100ms
+    command: npx tsx cicd/tests/src/mcp-client.ts device_swipe '{"x1":500,"y1":500,"x2":500,"y2":500,"durationMs":100}'
+    expectPatterns:
+      - "success.*true"
+      - "from"
+      - "to"
+      - "durationMs.*100"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify device_swipe forwards the event to `input swipe`.
+  - Tool returns success: true with from/to/durationMs echoed back
+  - Same-point swipe is intentionally a no-op gesture so the test does not
+    perturb whatever app is on screen
