@@ -1,0 +1,24 @@
+id: TC-SMS-001
+name: sms_read_recent returns the messages/count shape
+suite: sms
+tags: [sms]
+priority: 1
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Read recent SMS with default options
+    command: npx tsx cicd/tests/src/mcp-client.ts sms_read_recent '{}'
+    expectPatterns:
+      - "messages"
+      - "count"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify sms_read_recent returns the standard response shape.
+  - Tool returns successfully without errors
+  - Response always contains messages and count fields
+  - On Samsung/OEM devices that restrict content://sms/inbox the response
+    is { messages: [], count: 0, warning: "..." } — still passes shape check
+  - On stock Android the messages array carries the real inbox rows

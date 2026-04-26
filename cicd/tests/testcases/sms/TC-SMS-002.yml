@@ -1,0 +1,24 @@
+id: TC-SMS-002
+name: sms_read_recent accepts sender + body regex filters
+suite: sms
+tags: [sms]
+priority: 2
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Read recent SMS filtered to a sender substring + 4-8 digit body
+    command: npx tsx cicd/tests/src/mcp-client.ts sms_read_recent '{"senderFilter":"verify","bodyRegex":"\\d{4,8}","limit":5}'
+    expectPatterns:
+      - "messages"
+      - "count"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify sms_read_recent honors filter parameters without erroring.
+  - Tool accepts senderFilter, bodyRegex, and limit
+  - Filtered response still has messages and count fields
+  - Result will be empty on devices with no matching messages or with
+    OEM-restricted SMS access — that is expected and still passes the
+    shape check

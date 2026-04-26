@@ -1,0 +1,12 @@
+name: "Test: SMS"
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  test:
+    uses: ./.github/workflows/test-run.yml
+    with:
+      tag: sms
+    secrets: inherit

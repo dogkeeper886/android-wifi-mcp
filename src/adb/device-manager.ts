@@ -1,22 +1,25 @@
 import { AdbClient } from './adb-client.js';
 import { WifiCommands } from './wifi-commands.js';
 import { UICommands } from './ui-commands.js';
+import { SmsCommands } from './sms-commands.js';
 import { Device, DeviceInfo } from '../types.js';
 
 /**
  * Manages connected Android devices and provides unified access
- * to ADB, WiFi, and UI commands.
+ * to ADB, WiFi, UI, and SMS commands.
  */
 export class DeviceManager {
   private adb: AdbClient;
   private wifi: WifiCommands;
   private ui: UICommands;
+  private sms: SmsCommands;
   private devices: Map<string, DeviceInfo> = new Map();
 
   constructor(adbPath?: string) {
     this.adb = new AdbClient(adbPath);
     this.wifi = new WifiCommands(this.adb);
     this.ui = new UICommands(this.adb);
+    this.sms = new SmsCommands(this.adb);
   }
 
   /**
@@ -38,6 +41,13 @@ export class DeviceManager {
    */
   getUICommands(): UICommands {
     return this.ui;
+  }
+
+  /**
+   * Get the SMS commands instance
+   */
+  getSmsCommands(): SmsCommands {
+    return this.sms;
   }
 
   /**
