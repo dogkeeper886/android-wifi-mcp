@@ -1,0 +1,24 @@
+id: TC-SMK-003
+name: wifi_status returns enabled and connected
+suite: smoke
+tags: [smoke, wifi]
+priority: 3
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Get current WiFi status
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
+    expectPatterns:
+      - "enabled.*true"
+      - "connected.*true"
+      - "ssid"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify wifi_status reports the device is on WiFi.
+  - Tool returns successfully without errors
+  - enabled is true and connected is true
+  - An ssid field is present
+  - Smoke runner expects the test device to already be on a WiFi network

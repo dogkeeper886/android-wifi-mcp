@@ -1,0 +1,23 @@
+id: TC-SMK-001
+name: device_list returns the attached Android device
+suite: smoke
+tags: [smoke, device]
+priority: 1
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: List connected Android devices
+    command: npx tsx cicd/tests/src/mcp-client.ts device_list '{}'
+    expectPatterns:
+      - "devices"
+      - "serial"
+      - "selectedDevice"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify device_list returns a non-empty list of devices and a selected device.
+  - Tool returns successfully without errors
+  - Response contains the devices array and a selectedDevice field
+  - Confirms ADB is reachable and at least one device is attached

@@ -298,6 +298,55 @@ where adb  # Windows
 - Check `wifi_check_companion_app` returns success
 - Verify the domain suffix match is correct for your RADIUS server
 
+## Testing
+
+YAML-driven test framework under `cicd/tests/` runs against an attached Android device using the stdio transport.
+
+### Run smoke tests locally
+
+```bash
+# from repo root, one-time setup
+npm install && npm run build
+cd cicd/tests && npm install
+
+# run the smoke suite
+npm test                    # all tests
+npm run test:smoke          # smoke suite only
+npx tsx src/cli.ts list     # list available test cases
+npx tsx src/cli.ts run --id TC-SMK-001   # one specific test
+```
+
+Results land in `cicd/results/<timestamp>_<suite>/` (`summary.json` plus one `<test-id>.json` per test).
+
+### How the runner works
+
+- `mcp-client.ts` spawns `node dist/index.js --stdio`, calls one tool, prints the JSON result. Each test step is one such call.
+- `executor.ts` snapshots WiFi state (enabled flag, current SSID, saved-network IDs) before each test and restores it after — **per-test**, so a failing test cannot poison the next one. Snapshot/restore goes through `adb` directly so the framework doesn't depend on the very thing under test.
+- `simple-judge.ts` decides pass/fail from exit codes plus `expectPatterns`/`rejectPatterns`.
+
+### Test suites
+
+| Suite | What it covers |
+|---|---|
+| `smoke` | Read-only checks against existing tools — safe to run any time |
+| `wifi` | Connect/disconnect/forget against test SSIDs (env-driven) |
+| `enterprise` | 802.1X (PEAP/TTLS/TLS) — needs companion app + RADIUS test fixtures |
+| `ui` | UI-automation primitives — lands with the UI tools issue |
+| `portal` | Captive portal flows — lands with the portal tools issue |
+
+### Adding a new test case
+
+Use the `ci-testcase` skill (`.claude/skills/ci-testcase/SKILL.md`) — it generates a YAML in the right shape for the right suite. Pattern-matching gotcha: tool output is double-encoded JSON, so use **bare strings** in patterns (`connected.*true`, not `'"connected": true'`).
+
+### CI
+
+GitHub Actions workflows under `.github/workflows/`:
+
+- `build.yml` — runs on github-hosted runners, does `npm ci` + `tsc --noEmit` + `npm run build`. No device needed.
+- `test-run.yml` — reusable, `runs-on: self-hosted`, takes a `tag` input. Requires the runner to have `adb` installed and one Android device USB-attached.
+- `test-smoke.yml` — calls `test-run.yml` with `tag: smoke`.
+- `ci.yml` — orchestrator. **Manual trigger only** (`workflow_dispatch`) — chains build → test-smoke.
+
 ## Limitations
 
 - **Android 11+ Required**: The `cmd wifi` interface requires Android 11 (SDK 30) or higher
@@ -310,18 +359,33 @@ where adb  # Windows
 ```
 android-wifi-mcp/
 ├── src/
-│   ├── index.ts               # MCP server entry point
-│   ├── types.ts               # TypeScript interfaces
+│   ├── index.ts                # Entry — picks transport (HTTP / stdio)
+│   ├── server.ts               # MCP server factory + tool registrations
+│   ├── types.ts                # TypeScript interfaces
 │   ├── adb/
-│   │   ├── adb-client.ts      # ADB command wrapper
-│   │   ├── device-manager.ts  # Multi-device handling
-│   │   ├── wifi-commands.ts   # cmd wifi wrapper
-│   │   └── enterprise-wifi.ts # 802.1X enterprise WiFi
+│   │   ├── adb-client.ts       # ADB command wrapper
+│   │   ├── device-manager.ts   # Multi-device handling
+│   │   ├── wifi-commands.ts    # cmd wifi wrapper
+│   │   └── enterprise-wifi.ts  # 802.1X enterprise WiFi
 │   └── network/
-│       └── network-check.ts   # Network diagnostics
-├── companion-app/             # Android companion app for 802.1X
-│   ├── app/src/main/kotlin/   # Kotlin source files
-│   └── build.gradle.kts       # Gradle build config
+│       └── network-check.ts    # Network diagnostics
+├── companion-app/              # Android companion app for 802.1X
+│   ├── app/src/main/kotlin/    # Kotlin source files
+│   └── build.gradle.kts        # Gradle build config
+├── cicd/
+│   ├── tests/                  # YAML-driven test framework (see Testing)
+│   │   ├── src/
+│   │   │   ├── cli.ts
+│   │   │   ├── executor.ts     # per-test snapshot/restore of device state
+│   │   │   ├── device-state.ts # adb-direct snapshot/restore helpers
+│   │   │   ├── mcp-client.ts   # stdio MCP client
+│   │   │   ├── loader.ts, judge/, reporter/, types.ts, config.ts
+│   │   │   └── ...
+│   │   └── testcases/<suite>/  # smoke, wifi, enterprise, ui, portal
+│   └── results/                # JSON per-run results
+├── .github/workflows/          # build.yml, test-run.yml, test-smoke.yml, ci.yml
+├── .claude/skills/             # ci-testcase, ci-run
+├── .env.example
 ├── package.json
 ├── tsconfig.json
 └── README.md
