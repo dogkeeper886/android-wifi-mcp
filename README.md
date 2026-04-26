@@ -57,10 +57,21 @@ You should see your device listed as "device" (not "unauthorized" or "offline").
 cd android-wifi-mcp
 npm install
 npm run build
-npm start
+npm start             # HTTP transport on http://localhost:3000
+# or
+npm run start:stdio   # stdio transport (no port)
 ```
 
-The server will start on `http://localhost:3000`.
+#### Transport modes
+
+The server supports two transports:
+
+| Transport | Command | When to use |
+|---|---|---|
+| **HTTP** (default) | `npm start` | Long-running server, multiple clients, ad-hoc curl/health checks |
+| **stdio** | `npm run start:stdio` (or `node dist/index.js --stdio`) | MCP clients that spawn the server as a subprocess (Claude Code, test framework). Recommended — known stable. |
+
+In stdio mode the server reads/writes JSON-RPC on stdin/stdout; all logs go to stderr.
 
 ### 4. Configure Claude Code
 
@@ -71,9 +82,9 @@ The server will start on `http://localhost:3000`.
 claude mcp add --transport http android-wifi http://localhost:3000/mcp
 ```
 
-**Stdio transport** (auto-starts server):
+**Stdio transport** (auto-starts server, recommended):
 ```bash
-claude mcp add --transport stdio android-wifi -- node /path/to/android-wifi-mcp/dist/index.js
+claude mcp add --transport stdio android-wifi -- node /path/to/android-wifi-mcp/dist/index.js --stdio
 ```
 
 #### Manual JSON Configuration (Alternative)
@@ -85,10 +96,7 @@ Add to your MCP settings:
   "mcpServers": {
     "android-wifi": {
       "command": "node",
-      "args": ["/path/to/android-wifi-mcp/dist/index.js"],
-      "env": {
-        "PORT": "3000"
-      }
+      "args": ["/path/to/android-wifi-mcp/dist/index.js", "--stdio"]
     }
   }
 }

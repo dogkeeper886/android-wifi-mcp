@@ -1,673 +1,18 @@
-import express, { Request, Response } from 'express';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { z } from 'zod';
 import { DeviceManager } from './adb/device-manager.js';
-import { NetworkCheck } from './network/network-check.js';
-import { EnterpriseWifiCommands } from './adb/enterprise-wifi.js';
-import { SecurityType, EapMethod, Phase2Method } from './types.js';
+import { createMcpServer } from './server.js';
 
-const app = express();
-app.use(express.json());
+const useStdio = process.argv.includes('--stdio');
 
-// Create device manager
-const deviceManager = new DeviceManager();
-
-// Create MCP server
-const mcpServer = new McpServer({
-  name: 'android-wifi-mcp',
-  version: '1.0.0',
-});
-
-// Helper to ensure device is selected
-async function ensureDevice(): Promise<void> {
-  await deviceManager.ensureDeviceSelected();
+// In stdio mode, stdout is the JSON-RPC channel — any non-protocol bytes
+// break the client. Redirect console.log to stderr so device-manager init
+// messages don't poison the stream.
+if (useStdio) {
+  console.log = console.error;
 }
 
-// ============ Device Tools ============
+const deviceManager = new DeviceManager();
+const mcpServer = createMcpServer(deviceManager);
 
-mcpServer.tool(
-  'device_list',
-  'List all connected Android devices',
-  {},
-  async () => {
-    const devices = await deviceManager.listDevices();
-    const selectedDevice = deviceManager.getSelectedDevice();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              devices: devices.map(d => ({
-                serial: d.serial,
-                state: d.state,
-                model: d.model || d.product || 'Unknown',
-                selected: d.serial === selectedDevice,
-              })),
-              selectedDevice,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'device_select',
-  'Select an Android device for operations',
-  {
-    serial: z.string().describe('Device serial number'),
-  },
-  async ({ serial }) => {
-    deviceManager.selectDevice(serial);
-    const info = await deviceManager.getSelectedDeviceInfo();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Selected device: ${serial}\nModel: ${info.model}\nAndroid: ${info.androidVersion} (SDK ${info.sdkVersion})`,
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'device_info',
-  'Get detailed information about the selected Android device',
-  {},
-  async () => {
-    await ensureDevice();
-    const info = await deviceManager.getSelectedDeviceInfo();
-    const versionCheck = await deviceManager.checkAndroidVersion();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              ...info,
-              compatibility: versionCheck,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-);
-
-// ============ WiFi Tools ============
-
-mcpServer.tool(
-  'wifi_scan',
-  'Scan for available WiFi networks',
-  {},
-  async () => {
-    await ensureDevice();
-    const wifi = deviceManager.getWifiCommands();
-    const networks = await wifi.scan();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              count: networks.length,
-              networks: networks.sort((a, b) => b.rssi - a.rssi), // Sort by signal strength
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'wifi_connect',
-  'Connect to a WiFi network (WPA2/WPA3/Open/OWE)',
-  {
-    ssid: z.string().describe('Network SSID'),
-    security: z.enum(['open', 'owe', 'wpa2', 'wpa3']).describe('Security type'),
-    password: z.string().optional().describe('Network password (required for WPA2/WPA3)'),
-  },
-  async ({ ssid, security, password }) => {
-    await ensureDevice();
-    const wifi = deviceManager.getWifiCommands();
-
-    if ((security === 'wpa2' || security === 'wpa3') && !password) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'Error: Password is required for WPA2/WPA3 networks',
-          },
-        ],
-        isError: true,
-      };
-    }
-
-    const result = await wifi.connect(ssid, security as SecurityType, password);
-
-    if (result.success) {
-      const status = await wifi.getStatus();
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                success: true,
-                ssid: result.ssid,
-                status,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } else {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                success: false,
-                ssid: result.ssid,
-                error: result.error,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-);
-
-mcpServer.tool(
-  'wifi_disconnect',
-  'Disconnect from the current WiFi network',
-  {
-    mode: z
-      .enum(['toggle', 'forget'])
-      .optional()
-      .default('toggle')
-      .describe(
-        'Disconnect mode: "toggle" (disable/enable WiFi, keeps saved network) or "forget" (removes saved network)'
-      ),
-  },
-  async ({ mode }) => {
-    await ensureDevice();
-    const wifi = deviceManager.getWifiCommands();
-    await wifi.disconnect(mode);
-
-    const message =
-      mode === 'forget'
-        ? 'Disconnected and forgot WiFi network'
-        : 'Disconnected from WiFi network';
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: message,
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'wifi_status',
-  'Get current WiFi connection status',
-  {},
-  async () => {
-    await ensureDevice();
-    const wifi = deviceManager.getWifiCommands();
-    const status = await wifi.getStatus();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(status, null, 2),
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'wifi_enable',
-  'Enable WiFi on the device',
-  {},
-  async () => {
-    await ensureDevice();
-    const wifi = deviceManager.getWifiCommands();
-    await wifi.setEnabled(true);
-
-    // Wait a bit and check status
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const enabled = await wifi.isEnabled();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: enabled ? 'WiFi enabled successfully' : 'WiFi enable command sent (verify with wifi_status)',
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'wifi_disable',
-  'Disable WiFi on the device',
-  {},
-  async () => {
-    await ensureDevice();
-    const wifi = deviceManager.getWifiCommands();
-    await wifi.setEnabled(false);
-
-    // Wait a bit and check status
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const enabled = await wifi.isEnabled();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: !enabled ? 'WiFi disabled successfully' : 'WiFi disable command sent (verify with wifi_status)',
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'wifi_list_networks',
-  'List saved WiFi networks on the device',
-  {},
-  async () => {
-    await ensureDevice();
-    const wifi = deviceManager.getWifiCommands();
-    const networks = await wifi.listSavedNetworks();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              count: networks.length,
-              networks,
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'wifi_forget',
-  'Forget a saved WiFi network',
-  {
-    networkId: z.number().describe('Network ID to forget (from wifi_list_networks)'),
-  },
-  async ({ networkId }) => {
-    await ensureDevice();
-    const wifi = deviceManager.getWifiCommands();
-    await wifi.forgetNetwork(networkId);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Forgot network with ID ${networkId}`,
-        },
-      ],
-    };
-  }
-);
-
-// ============ Enterprise WiFi Tools (802.1X/EAP) ============
-
-mcpServer.tool(
-  'wifi_connect_enterprise',
-  'Connect to 802.1X enterprise WiFi (EAP-PEAP/TTLS/TLS). Requires companion app.',
-  {
-    ssid: z.string().describe('Network SSID'),
-    eapMethod: z.enum(['peap', 'ttls', 'tls']).describe('EAP method'),
-    identity: z.string().describe('Username or email for authentication'),
-    domainSuffixMatch: z.string().describe('RADIUS server domain (e.g., radius.corp.com)'),
-    phase2Method: z
-      .enum(['mschapv2', 'pap', 'gtc', 'none'])
-      .optional()
-      .default('mschapv2')
-      .describe('Phase 2 authentication method (for PEAP/TTLS)'),
-    password: z.string().optional().describe('Password (required for PEAP/TTLS)'),
-    anonymousIdentity: z.string().optional().describe('Anonymous outer identity'),
-    caCertificate: z.string().optional().describe('CA certificate (base64-encoded PEM)'),
-    clientCertificate: z.string().optional().describe('Client certificate for EAP-TLS (base64-encoded PEM)'),
-    privateKey: z.string().optional().describe('Private key for EAP-TLS (base64-encoded PEM)'),
-    privateKeyPassword: z.string().optional().describe('Private key password (if encrypted)'),
-  },
-  async (params) => {
-    await ensureDevice();
-    const enterpriseWifi = new EnterpriseWifiCommands(deviceManager.getAdbClient());
-
-    const result = await enterpriseWifi.connectEnterprise({
-      ssid: params.ssid,
-      eapMethod: params.eapMethod as EapMethod,
-      phase2Method: params.phase2Method as Phase2Method,
-      identity: params.identity,
-      password: params.password,
-      anonymousIdentity: params.anonymousIdentity,
-      domainSuffixMatch: params.domainSuffixMatch,
-      caCertificate: params.caCertificate,
-      clientCertificate: params.clientCertificate,
-      privateKey: params.privateKey,
-      privateKeyPassword: params.privateKeyPassword,
-    });
-
-    if (result.success) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                success: true,
-                ssid: result.ssid,
-                eapMethod: result.eapMethod,
-                message: 'Connected to enterprise WiFi successfully',
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } else {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                success: false,
-                ssid: result.ssid,
-                eapMethod: result.eapMethod,
-                error: result.error,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-);
-
-mcpServer.tool(
-  'wifi_install_certificate',
-  'Install a CA or client certificate for enterprise WiFi. Requires companion app.',
-  {
-    certificate: z.string().describe('Certificate content (base64-encoded PEM or DER)'),
-    alias: z.string().describe('Friendly name for the certificate'),
-    type: z.enum(['ca', 'client']).describe('Certificate type'),
-  },
-  async ({ certificate, alias, type }) => {
-    await ensureDevice();
-    const enterpriseWifi = new EnterpriseWifiCommands(deviceManager.getAdbClient());
-
-    const result = await enterpriseWifi.installCertificate(certificate, alias, type);
-
-    if (result.success) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                success: true,
-                alias: result.alias,
-                type: result.type,
-                message: `Certificate "${alias}" installed successfully`,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-      };
-    } else {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                success: false,
-                alias: result.alias,
-                type: result.type,
-                error: result.error,
-              },
-              null,
-              2
-            ),
-          },
-        ],
-        isError: true,
-      };
-    }
-  }
-);
-
-mcpServer.tool(
-  'wifi_check_companion_app',
-  'Check if the enterprise WiFi companion app is installed',
-  {},
-  async () => {
-    await ensureDevice();
-    const enterpriseWifi = new EnterpriseWifiCommands(deviceManager.getAdbClient());
-    const installed = await enterpriseWifi.isCompanionAppInstalled();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(
-            {
-              companionAppInstalled: installed,
-              packageName: 'com.example.wifimcpcompanion',
-              message: installed
-                ? 'Companion app is installed and ready for enterprise WiFi'
-                : 'Companion app not installed. Please install it to use enterprise WiFi features.',
-            },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-);
-
-// ============ Network Diagnostics Tools ============
-
-mcpServer.tool(
-  'network_ping',
-  'Ping a host from the device',
-  {
-    host: z.string().describe('Host to ping (IP address or hostname)'),
-    count: z.number().optional().default(4).describe('Number of ping packets'),
-  },
-  async ({ host, count }) => {
-    await ensureDevice();
-    const networkCheck = new NetworkCheck(deviceManager.getAdbClient());
-    const result = await networkCheck.ping(host, count);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'network_dns_lookup',
-  'Perform DNS lookup from the device',
-  {
-    hostname: z.string().describe('Hostname to resolve'),
-  },
-  async ({ hostname }) => {
-    await ensureDevice();
-    const networkCheck = new NetworkCheck(deviceManager.getAdbClient());
-    const result = await networkCheck.dnsLookup(hostname);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'network_check_internet',
-  'Check internet connectivity from the device',
-  {},
-  async () => {
-    await ensureDevice();
-    const networkCheck = new NetworkCheck(deviceManager.getAdbClient());
-    const result = await networkCheck.checkInternet();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'network_check_captive',
-  'Check for captive portal on the device',
-  {},
-  async () => {
-    await ensureDevice();
-    const networkCheck = new NetworkCheck(deviceManager.getAdbClient());
-    const result = await networkCheck.checkCaptivePortal();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  }
-);
-
-mcpServer.tool(
-  'network_interface_info',
-  'Get network interface information (IP, gateway, DNS)',
-  {},
-  async () => {
-    await ensureDevice();
-    const networkCheck = new NetworkCheck(deviceManager.getAdbClient());
-    const result = await networkCheck.getInterfaceInfo();
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
-  }
-);
-
-// ============ HTTP Server Setup ============
-
-// MCP endpoint using Streamable HTTP Transport
-app.post('/mcp', async (req: Request, res: Response) => {
-  try {
-    const transport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined, // Stateless mode
-    });
-
-    res.on('close', () => {
-      transport.close();
-    });
-
-    await mcpServer.connect(transport);
-    await transport.handleRequest(req, res, req.body);
-  } catch (error) {
-    console.error('MCP request error:', error);
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  }
-});
-
-// Health check endpoint
-app.get('/health', async (_req: Request, res: Response) => {
-  const adbAvailable = await deviceManager.getAdbClient().checkAdb();
-  let deviceCount = 0;
-
-  try {
-    const devices = await deviceManager.listDevices();
-    deviceCount = devices.filter(d => d.state === 'device').length;
-  } catch {
-    // Ignore errors
-  }
-
-  res.json({
-    status: adbAvailable ? 'ok' : 'degraded',
-    server: 'android-wifi-mcp',
-    version: '1.0.0',
-    adb: adbAvailable,
-    connectedDevices: deviceCount,
-  });
-});
-
-// Graceful shutdown
 const shutdown = async () => {
   console.log('Shutting down...');
   process.exit(0);
@@ -676,17 +21,11 @@ const shutdown = async () => {
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
-// Start server
-const startServer = async () => {
-  const PORT = process.env.PORT || 3000;
-  const HOST = process.env.HOST || '0.0.0.0';
-
-  // Initialize device manager
+async function initDevice(): Promise<void> {
   try {
     await deviceManager.initialize();
     console.log('ADB initialized successfully');
 
-    // List connected devices
     const devices = await deviceManager.listDevices();
     const connectedDevices = devices.filter(d => d.state === 'device');
     console.log(`Connected devices: ${connectedDevices.length}`);
@@ -697,12 +36,87 @@ const startServer = async () => {
     console.error('Warning: ADB initialization failed:', error);
     console.error('Please ensure Android SDK Platform Tools are installed and in PATH');
   }
+}
+
+async function startStdio(): Promise<void> {
+  const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
+
+  await initDevice();
+
+  const transport = new StdioServerTransport();
+  await mcpServer.connect(transport);
+  console.error('android-wifi-mcp listening on stdio');
+}
+
+async function startHttp(): Promise<void> {
+  const express = (await import('express')).default;
+  const { StreamableHTTPServerTransport } = await import(
+    '@modelcontextprotocol/sdk/server/streamableHttp.js'
+  );
+
+  const app = express();
+  app.use(express.json());
+
+  app.post('/mcp', async (req, res) => {
+    try {
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+      });
+
+      res.on('close', () => {
+        transport.close();
+      });
+
+      await mcpServer.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (error) {
+      console.error('MCP request error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    }
+  });
+
+  app.get('/health', async (_req, res) => {
+    const adbAvailable = await deviceManager.getAdbClient().checkAdb();
+    let deviceCount = 0;
+
+    try {
+      const devices = await deviceManager.listDevices();
+      deviceCount = devices.filter(d => d.state === 'device').length;
+    } catch {
+      // Ignore errors
+    }
+
+    res.json({
+      status: adbAvailable ? 'ok' : 'degraded',
+      server: 'android-wifi-mcp',
+      version: '1.0.0',
+      adb: adbAvailable,
+      connectedDevices: deviceCount,
+    });
+  });
+
+  await initDevice();
+
+  const PORT = process.env.PORT || 3000;
+  const HOST = process.env.HOST || '0.0.0.0';
 
   app.listen(Number(PORT), HOST, () => {
     console.log(`android-wifi-mcp server listening on http://${HOST}:${PORT}`);
     console.log(`MCP endpoint: http://${HOST}:${PORT}/mcp`);
     console.log(`Health check: http://${HOST}:${PORT}/health`);
   });
-};
+}
 
-startServer();
+if (useStdio) {
+  startStdio().catch((err) => {
+    console.error('Failed to start stdio server:', err);
+    process.exit(1);
+  });
+} else {
+  startHttp().catch((err) => {
+    console.error('Failed to start HTTP server:', err);
+    process.exit(1);
+  });
+}
