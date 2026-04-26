@@ -1,0 +1,30 @@
+id: TC-UI-009
+name: device_open_url opens example.com and returns home
+suite: ui
+tags: [ui]
+priority: 9
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Open https://example.com via VIEW intent
+    command: npx tsx cicd/tests/src/mcp-client.ts device_open_url '{"url":"https://example.com"}'
+    expectPatterns:
+      - "success.*true"
+      - "example.com"
+    rejectPatterns:
+      - "isError"
+
+  - name: Press HOME to return to launcher
+    command: npx tsx cicd/tests/src/mcp-client.ts device_keyevent '{"keycode":"KEYCODE_HOME"}'
+    expectPatterns:
+      - "success.*true"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify device_open_url launches the default browser with the URL.
+  - Tool returns success: true with the URL echoed back
+  - HOME keyevent restores the launcher state at the end
+  - The test does not assert the browser actually rendered the page —
+    that requires the browser tools planned in #10 (Playwright on Android)

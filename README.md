@@ -193,6 +193,22 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 | `network_check_captive` | Check for captive portal |
 | `network_interface_info` | Get IP, gateway, DNS info |
 
+### UI Automation
+
+OS-level primitives (pixel/UI-tree, not DOM). For browser-page DOM automation, see the planned `browser_*` tools tracked in #10.
+
+| Tool | Description |
+|------|-------------|
+| `device_launch_app` | Launch an app by package or `pkg/.Activity` component |
+| `device_open_url` | Open a URL in the default browser via VIEW intent |
+| `device_tap` | Tap at (x, y) screen coordinates |
+| `device_swipe` | Swipe between two coordinates with optional duration |
+| `device_type_text` | Type text into the focused field |
+| `device_keyevent` | Send a keyevent (e.g. `KEYCODE_HOME`, `KEYCODE_BACK`) |
+| `device_screenshot` | Capture a PNG (returns base64 or saves to a host path) |
+| `device_ui_dump` | Dump the on-screen UI hierarchy as XML |
+| `device_list_packages` | List installed app package names |
+
 ## Usage Examples
 
 ### List Connected Devices
@@ -242,6 +258,22 @@ This will use `wifi_connect_enterprise` with:
 ```
 > Check if my phone has internet access and detect any captive portal
 ```
+
+### Launch an App and Take a Screenshot
+
+```
+> Launch the Settings app on my phone, take a screenshot to /tmp/settings.png, then return to home
+```
+
+This chains `device_launch_app` (target: `com.android.settings`), `device_screenshot` (outputPath: `/tmp/settings.png`), and `device_keyevent` (keycode: `KEYCODE_HOME`).
+
+### Open a URL and Inspect the Page
+
+```
+> Open https://example.com on my phone and dump the on-screen UI hierarchy
+```
+
+Uses `device_open_url` then `device_ui_dump` for OS-level inspection. For DOM-level browser automation see #10.
 
 ## Reference
 
@@ -366,6 +398,7 @@ android-wifi-mcp/
 │   │   ├── adb-client.ts       # ADB command wrapper
 │   │   ├── device-manager.ts   # Multi-device handling
 │   │   ├── wifi-commands.ts    # cmd wifi wrapper
+│   │   ├── ui-commands.ts      # input / am start / screencap / uiautomator
 │   │   └── enterprise-wifi.ts  # 802.1X enterprise WiFi
 │   └── network/
 │       └── network-check.ts    # Network diagnostics

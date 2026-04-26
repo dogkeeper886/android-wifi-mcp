@@ -1,0 +1,23 @@
+id: TC-UI-001
+name: device_list_packages returns installed apps
+suite: ui
+tags: [ui]
+priority: 1
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: List packages filtered to com.android
+    command: npx tsx cicd/tests/src/mcp-client.ts device_list_packages '{"filter":"com.android"}'
+    expectPatterns:
+      - "packages"
+      - "count"
+      - "com.android"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify device_list_packages returns a non-empty package list.
+  - Tool returns successfully without errors
+  - Response contains the packages array and a count field
+  - At least one com.android.* package is reported (always true on stock Android)
