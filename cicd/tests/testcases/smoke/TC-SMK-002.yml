@@ -1,0 +1,24 @@
+id: TC-SMK-002
+name: device_info reports a supported Android version (SDK >= 30)
+suite: smoke
+tags: [smoke, device]
+priority: 2
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Get device info
+    command: npx tsx cicd/tests/src/mcp-client.ts device_info '{}'
+    expectPatterns:
+      - "sdkVersion"
+      - "androidVersion"
+      - "supported.*true"
+    rejectPatterns:
+      - "isError"
+      - "supported.*false"
+
+criteria: |
+  Verify device_info returns a device with SDK >= 30 (Android 11+).
+  - Tool returns successfully without errors
+  - Response contains sdkVersion and androidVersion fields
+  - The compatibility.supported flag is true (deviceManager checks SDK >= 30)

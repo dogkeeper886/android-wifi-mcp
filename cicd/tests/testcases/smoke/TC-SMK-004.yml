@@ -1,0 +1,24 @@
+id: TC-SMK-004
+name: wifi_scan returns at least one network
+suite: smoke
+tags: [smoke, wifi]
+priority: 4
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Scan for WiFi networks
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_scan '{}'
+    expectPatterns:
+      - "networks"
+      - "count"
+      - "bssid"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify wifi_scan returns scan results.
+  - Tool returns successfully without errors
+  - Response contains a networks array and a count field
+  - The bssid pattern confirms at least one parsed network entry exists
+    (an empty count would not produce any bssid lines)

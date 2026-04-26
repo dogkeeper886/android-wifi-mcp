@@ -1,0 +1,13 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+
+  test-smoke:
+    needs: build
+    uses: ./.github/workflows/test-smoke.yml
+    secrets: inherit

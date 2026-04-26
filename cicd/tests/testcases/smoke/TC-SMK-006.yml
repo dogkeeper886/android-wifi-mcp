@@ -1,0 +1,22 @@
+id: TC-SMK-006
+name: network_check_internet reports hasInternet true
+suite: smoke
+tags: [smoke, network]
+priority: 6
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Check internet connectivity
+    command: npx tsx cicd/tests/src/mcp-client.ts network_check_internet '{}'
+    expectPatterns:
+      - "hasInternet.*true"
+    rejectPatterns:
+      - "isError"
+      - "hasInternet.*false"
+
+criteria: |
+  Verify network_check_internet confirms the device can reach the internet.
+  - Tool returns successfully without errors
+  - hasInternet is true
+  - Smoke runner expects the test device to have working internet

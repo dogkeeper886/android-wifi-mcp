@@ -3,3 +3,7 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Test framework artifacts
+cicd/results/
+cicd/tests/dist/

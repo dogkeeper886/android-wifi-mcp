@@ -1,0 +1,23 @@
+id: TC-SMK-007
+name: network_interface_info returns an IP address
+suite: smoke
+tags: [smoke, network]
+priority: 7
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Get WiFi interface info
+    command: npx tsx cicd/tests/src/mcp-client.ts network_interface_info '{}'
+    expectPatterns:
+      - "interface"
+      - "ipAddress"
+      - "\\d+\\.\\d+\\.\\d+\\.\\d+"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify network_interface_info returns the wlan0 interface and its IP.
+  - Tool returns successfully without errors
+  - Response contains the interface and ipAddress fields
+  - ipAddress matches an IPv4 dotted-quad pattern

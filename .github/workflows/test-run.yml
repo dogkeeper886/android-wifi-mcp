@@ -1,0 +1,33 @@
+name: Test Run (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Suite tag to filter tests (e.g. smoke)'
+        required: true
+        type: string
+
+jobs:
+  test:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install server dependencies
+        run: npm ci
+
+      - name: Build server
+        run: npm run build
+
+      - name: Install test dependencies
+        run: cd cicd/tests && npm install
+
+      - name: Run tests
+        run: |
+          cd cicd/tests
+          npx tsx src/cli.ts run --tag ${{ inputs.tag }} --format console
+        env:
+          TEST_DEVICE_SERIAL: ${{ secrets.TEST_DEVICE_SERIAL }}
+          ADB_PATH: ${{ secrets.ADB_PATH }}
