@@ -7,3 +7,6 @@ dist/
 # Test framework artifacts
 cicd/results/
 cicd/tests/dist/
+
+# @playwright/mcp scratch (when used as an upstream)
+.playwright-mcp/

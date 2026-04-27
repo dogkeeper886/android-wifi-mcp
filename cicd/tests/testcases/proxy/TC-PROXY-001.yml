@@ -1,0 +1,25 @@
+id: TC-PROXY-001
+name: Proxy exposes a mock upstream's tool through the unified namespace
+suite: proxy
+tags: [proxy]
+priority: 1
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Call mock_echo through our server (proxied from mock upstream)
+    command: |
+      UPSTREAM_MCP='mock=node cicd/tests/fixtures/mock-mcp-upstream.mjs' \
+        npx tsx cicd/tests/src/mcp-client.ts mock_echo '{"text":"hello-from-test"}'
+    expectPatterns:
+      - "MOCK_ECHO: hello-from-test"
+    rejectPatterns:
+      - "isError"
+      - "Unknown tool"
+
+criteria: |
+  Verify the upstream proxy mechanism works end-to-end with no external deps.
+  - Our server spawns the mock upstream subprocess via UPSTREAM_MCP
+  - The mock's mock_echo tool is registered into our unified tools list
+  - tools/call routes the call to the mock subprocess and returns the result
+  - The text argument passes through the proxy unchanged

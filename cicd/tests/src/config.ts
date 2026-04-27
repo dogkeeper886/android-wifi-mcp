@@ -2,7 +2,7 @@
  * Project configuration for the test framework.
  */
 
-export const SUITES = ['smoke', 'wifi', 'enterprise', 'ui', 'sms', 'portal'] as const;
+export const SUITES = ['smoke', 'wifi', 'enterprise', 'ui', 'sms', 'portal', 'proxy'] as const;
 export type Suite = typeof SUITES[number];
 
 export const CONFIG = {
