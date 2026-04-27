@@ -154,6 +154,8 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 
 ## Available Tools
 
+**30 native tools** in 6 categories below. With the optional `@playwright/mcp` upstream enabled (see [Proxying upstream MCPs](#proxying-upstream-mcps)), an additional **21 `browser_*` tools** are surfaced through the same endpoint for **51 total**.
+
 ### Device Management
 
 | Tool | Description |
@@ -195,7 +197,7 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 
 ### UI Automation
 
-OS-level primitives (pixel/UI-tree, not DOM). For browser-page DOM automation, see the planned `browser_*` tools tracked in #10.
+OS-level primitives (pixel/UI-tree, not DOM). For DOM-level browser automation, enable the `@playwright/mcp` upstream proxy described in [Proxying upstream MCPs](#proxying-upstream-mcps) — those `browser_*` tools complement these for web-page targets.
 
 | Tool | Description |
 |------|-------------|
@@ -217,6 +219,10 @@ Reads SMS messages from `content://sms/inbox` via adb shell — no root, no comp
 |------|-------------|
 | `sms_read_recent` | Read recent SMS, optionally filtered by sender, body regex, or recency |
 | `sms_wait_for_otp` | Poll the inbox until a matching OTP arrives or timeout elapses |
+
+### Proxied (optional)
+
+When `UPSTREAM_MCP` is configured, this server transparently exposes tools from upstream MCP servers in the same namespace. The canonical default (`@playwright/mcp`) adds 21 DOM-level `browser_*` tools — `browser_navigate`, `browser_click`, `browser_fill_form`, `browser_evaluate`, `browser_snapshot`, `browser_take_screenshot`, etc. See [Proxying upstream MCPs](#proxying-upstream-mcps) for setup. These drive **host** Chromium today; phone-side Chrome is gated on a working Chrome DevTools Protocol path.
 
 ## Usage Examples
 
@@ -409,13 +415,15 @@ Results land in `cicd/results/<timestamp>_<suite>/` (`summary.json` plus one `<t
 
 ### Test suites
 
-| Suite | What it covers |
-|---|---|
-| `smoke` | Read-only checks against existing tools — safe to run any time |
-| `wifi` | Connect/disconnect/forget against test SSIDs (env-driven) |
-| `enterprise` | 802.1X (PEAP/TTLS/TLS) — needs companion app + RADIUS test fixtures |
-| `ui` | UI-automation primitives — lands with the UI tools issue |
-| `portal` | Captive portal flows — lands with the portal tools issue |
+| Suite | What it covers | Status |
+|---|---|---|
+| `smoke` | Read-only checks against existing tools — safe to run any time | 7 tests |
+| `ui` | UI-automation primitives (`device_*` from #1) | 9 tests |
+| `sms` | SMS / OTP shape checks (tolerates Samsung-restricted inboxes) | 3 tests |
+| `proxy` | Upstream MCP proxying — mock + `@playwright/mcp` end-to-end | 2 tests |
+| `wifi` | Connect/disconnect/forget against test SSIDs (env-driven) | not yet |
+| `enterprise` | 802.1X (PEAP/TTLS/TLS) — needs companion app + RADIUS fixtures | not yet |
+| `portal` | Captive portal flows — see #4 (deferred) | not yet |
 
 ### Adding a new test case
 
@@ -468,9 +476,10 @@ android-wifi-mcp/
 │   │   │   ├── mcp-client.ts   # stdio MCP client
 │   │   │   ├── loader.ts, judge/, reporter/, types.ts, config.ts
 │   │   │   └── ...
-│   │   └── testcases/<suite>/  # smoke, wifi, enterprise, ui, portal
+│   │   ├── testcases/<suite>/  # smoke, ui, sms, proxy (wifi/enterprise/portal pending)
+│   │   └── fixtures/           # mock-mcp-upstream.mjs (used by TC-PROXY-001)
 │   └── results/                # JSON per-run results
-├── .github/workflows/          # build.yml, test-run.yml, test-smoke.yml, ci.yml
+├── .github/workflows/          # build.yml, test-run.yml, test-{smoke,ui,sms,proxy}.yml, ci.yml
 ├── .claude/skills/             # ci-testcase, ci-run
 ├── .env.example
 ├── package.json
