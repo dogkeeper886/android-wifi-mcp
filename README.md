@@ -375,7 +375,7 @@ The HTTP `/health` endpoint reports per-upstream state (`connected` / `disconnec
 
 ### Lifecycle
 
-Upstreams start eagerly at server boot. On `SIGINT` / `SIGTERM` the server closes all upstream subprocesses cleanly. Auto-restart on crash is **not** implemented in v1; if an upstream dies, restart the parent server.
+Upstreams start eagerly at server boot. On `SIGINT` / `SIGTERM` the server closes all upstream subprocesses cleanly.
 
 ### Verified composition
 
