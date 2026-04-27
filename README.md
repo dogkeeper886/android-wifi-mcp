@@ -30,7 +30,7 @@ This server enables Claude and other MCP clients to remotely control WiFi connec
 
 ### For Enterprise WiFi or Notification Capture (Optional)
 
-The companion Android app is needed for 802.1X enterprise WiFi (#5) and for capturing OTPs that don't arrive via SMS (#3 — notification listener for WhatsApp / email / banking). Skip this section if you only need WPA2/WPA3 personal WiFi + SMS-based OTPs.
+The companion Android app is needed for 802.1X enterprise WiFi and for capturing OTPs that don't arrive via SMS (#3 — notification listener for WhatsApp / email / banking). Skip this section if you only need WPA2/WPA3 personal WiFi + SMS-based OTPs.
 
 **One-time host setup (Linux example, Fedora/RHEL):**
 

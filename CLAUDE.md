@@ -71,7 +71,8 @@ The unified namespace is the design goal: Claude Code sees one server, gets one 
 - **Add a test:** see `ci-testcase` skill.
 - **Run tests locally:** `cd cicd/tests && npm test` (smoke + everything tagged); add `--suite <s>` to scope.
 - **Issue → PR:** `dw-implement` → `dw-create-pr` → `dw-review-pr` → `dw-merge` (home-level skills, see `~/.claude/CLAUDE.md`).
-- **Direct-push exceptions:** docs-only or this CLAUDE.md update can go straight to `main` per home rules. **Verify every factual claim in the change *before* `git push`** — counts, file paths, anchor links, command names. Post-push review is a backstop, not the gate.
+- **Always branch + PR.** Even for docs / README / CLAUDE.md / config-only changes. The home-level "direct-push for docs" exception does **not** apply in this repo — a wrong-issue-number bug shipped through a docs-only direct-push (commit `1829746`) and the PR self-review would have caught it. Branch as `fix/<slug>` or `feature/<slug>` for non-issue-tracked work.
+- **Verify factual claims before push** regardless of branch — counts, file paths, anchor links, command names, issue numbers. Run `npm run tools:count` for tool count claims. Post-push / post-merge review is a backstop, not the gate.
 
 ## Conventions
 
