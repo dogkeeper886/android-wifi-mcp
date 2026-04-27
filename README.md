@@ -28,9 +28,36 @@ This server enables Claude and other MCP clients to remotely control WiFi connec
 - USB Debugging enabled
 - USB cable connection to host PC
 
-### For Enterprise WiFi (Optional)
-- Android SDK (for building companion app)
-- Gradle 8.x
+### For Enterprise WiFi or Notification Capture (Optional)
+
+The companion Android app is needed for 802.1X enterprise WiFi (#5) and for capturing OTPs that don't arrive via SMS (#3 — notification listener for WhatsApp / email / banking). Skip this section if you only need WPA2/WPA3 personal WiFi + SMS-based OTPs.
+
+**One-time host setup (Linux example, Fedora/RHEL):**
+
+```bash
+# JDK with javac (the headless variant alone won't compile)
+sudo dnf install -y java-21-openjdk-devel
+
+# Android command-line tools (~150 MB)
+mkdir -p ~/Android/Sdk/cmdline-tools
+curl -L -o /tmp/cmdline-tools.zip \
+  "https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip"
+unzip -q /tmp/cmdline-tools.zip -d /tmp && \
+  mv /tmp/cmdline-tools ~/Android/Sdk/cmdline-tools/latest
+
+export ANDROID_HOME=$HOME/Android/Sdk
+export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH
+
+yes | sdkmanager --licenses > /dev/null
+sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
+
+# Gradle 8.5 (only if you don't already have a system Gradle)
+curl -L -o /tmp/gradle.zip "https://services.gradle.org/distributions/gradle-8.5-bin.zip"
+unzip -q /tmp/gradle.zip -d /tmp && mv /tmp/gradle-8.5 ~/Android/gradle
+export PATH=~/Android/gradle/bin:$PATH
+```
+
+After this, `cd companion-app && gradle wrapper && ./gradlew assembleDebug` produces `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Setup
 

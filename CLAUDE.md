@@ -71,7 +71,7 @@ The unified namespace is the design goal: Claude Code sees one server, gets one 
 - **Add a test:** see `ci-testcase` skill.
 - **Run tests locally:** `cd cicd/tests && npm test` (smoke + everything tagged); add `--suite <s>` to scope.
 - **Issue → PR:** `dw-implement` → `dw-create-pr` → `dw-review-pr` → `dw-merge` (home-level skills, see `~/.claude/CLAUDE.md`).
-- **Direct-push exceptions:** docs-only or this CLAUDE.md update can go straight to `main` per home rules. Verify before pushing.
+- **Direct-push exceptions:** docs-only or this CLAUDE.md update can go straight to `main` per home rules. **Verify every factual claim in the change *before* `git push`** — counts, file paths, anchor links, command names. Post-push review is a backstop, not the gate.
 
 ## Conventions
 
@@ -79,6 +79,8 @@ The unified namespace is the design goal: Claude Code sees one server, gets one 
 - Tool descriptions: short imperative, one line. The MCP client surfaces this verbatim.
 - `ensureDevice()` is called at the top of every tool that touches the device — auto-selects the only connected device or errors clearly when ambiguous.
 - Don't add features speculatively. The `auto-restart` caveat for #14 and the `portal_*` wrappers in #4 were both speculative; both were dropped or deferred when the user asked "is this an assumption?" — yes, they were.
+- **Spec sanity gate (before filing a feature issue):** (1) list the existing-tool composition that would already cover the use case; (2) name a real test scenario that needs the new work today, not someday; (3) if either is missing, defer or close. The "is this an assumption?" question is a stop-and-check signal, not something to argue past.
+- **Tool count discipline.** Whenever you add or remove a tool from `src/server.ts`, run `npm run tools:count` and update README's "**N native tools**" line in the same commit. Drift compounds quickly.
 
 ## Pointers
 

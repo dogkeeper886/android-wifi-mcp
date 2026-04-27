@@ -9,7 +9,8 @@
     "start": "node dist/index.js",
     "start:stdio": "node dist/index.js --stdio",
     "dev": "tsc --watch",
-    "test:unit": "node --test 'tests/unit/**/*.test.mjs'"
+    "test:unit": "node --test 'tests/unit/**/*.test.mjs'",
+    "tools:count": "echo \"Native tools registered in src/server.ts: $(grep -c 'mcpServer\\.tool(' src/server.ts)\""
   },
   "keywords": [
     "mcp",
