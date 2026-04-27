@@ -154,7 +154,7 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 
 ## Available Tools
 
-**30 native tools** in 6 categories below. With the optional `@playwright/mcp` upstream enabled (see [Proxying upstream MCPs](#proxying-upstream-mcps)), an additional **21 `browser_*` tools** are surfaced through the same endpoint for **51 total**.
+**32 native tools** in 7 categories below. With the optional `@playwright/mcp` upstream enabled (see [Proxying upstream MCPs](#proxying-upstream-mcps)), an additional **21 `browser_*` tools** are surfaced through the same endpoint for **53 total**.
 
 ### Device Management
 
@@ -219,6 +219,15 @@ Reads SMS messages from `content://sms/inbox` via adb shell — no root, no comp
 |------|-------------|
 | `sms_read_recent` | Read recent SMS, optionally filtered by sender, body regex, or recency |
 | `sms_wait_for_otp` | Poll the inbox until a matching OTP arrives or timeout elapses |
+
+### Notification capture (companion app)
+
+For OTPs that don't come via SMS — WhatsApp, banking apps, email clients, etc. The companion app's `NotificationListenerService` captures every notification system-wide, then the host MCP server reads them through the same broadcast bridge used for enterprise WiFi. **Requires** the user to grant **Notification access** to the companion app once via Settings → Notifications → Notification access (the app's main screen has a one-tap shortcut). Granted state is reported by `wifi_check_companion_app`.
+
+| Tool | Description |
+|------|-------------|
+| `notifications_list_recent` | List recent captured notifications, optionally filtered by package or body regex |
+| `notifications_wait_for_otp` | Poll captured notifications until a matching OTP arrives or timeout elapses |
 
 ### Proxied (optional)
 
@@ -428,6 +437,7 @@ Results land in `cicd/results/<timestamp>_<suite>/` (`summary.json` plus one `<t
 | `smoke` | Read-only checks against existing tools — safe to run any time | 7 tests |
 | `ui` | UI-automation primitives (`device_*` from #1) | 9 tests |
 | `sms` | SMS / OTP shape checks (tolerates Samsung-restricted inboxes) | 3 tests |
+| `notifications` | Notification capture via companion app (OTPs from any package) | 3 tests |
 | `proxy` | Upstream MCP proxying — mock + `@playwright/mcp` end-to-end | 2 tests |
 | `wifi` | Connect/disconnect/forget against test SSIDs (env-driven) | not yet |
 | `enterprise` | 802.1X (PEAP/TTLS/TLS) — needs companion app + RADIUS fixtures | not yet |
@@ -469,6 +479,7 @@ android-wifi-mcp/
 │   │   ├── wifi-commands.ts    # cmd wifi wrapper
 │   │   ├── ui-commands.ts      # input / am start / screencap / uiautomator
 │   │   ├── sms-commands.ts     # SMS read / OTP polling via content provider
+│   │   ├── notifications-commands.ts # Notification capture via companion app
 │   │   └── enterprise-wifi.ts  # 802.1X enterprise WiFi
 │   └── network/
 │       └── network-check.ts    # Network diagnostics
@@ -484,10 +495,10 @@ android-wifi-mcp/
 │   │   │   ├── mcp-client.ts   # stdio MCP client
 │   │   │   ├── loader.ts, judge/, reporter/, types.ts, config.ts
 │   │   │   └── ...
-│   │   ├── testcases/<suite>/  # smoke, ui, sms, proxy (wifi/enterprise/portal pending)
+│   │   ├── testcases/<suite>/  # smoke, ui, sms, notifications, proxy (wifi/enterprise/portal pending)
 │   │   └── fixtures/           # mock-mcp-upstream.mjs (used by TC-PROXY-001)
 │   └── results/                # JSON per-run results
-├── .github/workflows/          # build.yml, test-run.yml, test-{smoke,ui,sms,proxy}.yml, ci.yml
+├── .github/workflows/          # build.yml, test-run.yml, test-{smoke,ui,sms,notifications,proxy}.yml, ci.yml
 ├── .claude/skills/             # ci-testcase, ci-run
 ├── .env.example
 ├── package.json

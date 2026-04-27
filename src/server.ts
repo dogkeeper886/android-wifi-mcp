@@ -499,6 +499,10 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
       const enterpriseWifi = new EnterpriseWifiCommands(deviceManager.getAdbClient());
       const installed = await enterpriseWifi.isCompanionAppInstalled();
 
+      const notifStatus = installed
+        ? await deviceManager.getNotificationCommands().getStatus().catch(() => null)
+        : null;
+
       return {
         content: [
           {
@@ -507,9 +511,13 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
               {
                 companionAppInstalled: installed,
                 packageName: 'com.example.wifimcpcompanion',
+                notificationAccessGranted: notifStatus?.listenerConnected ?? false,
+                capturedNotifications: notifStatus?.capturedCount ?? 0,
                 message: installed
-                  ? 'Companion app is installed and ready for enterprise WiFi'
-                  : 'Companion app not installed. Please install it to use enterprise WiFi features.',
+                  ? notifStatus?.listenerConnected
+                    ? 'Companion app installed; notification access granted'
+                    : 'Companion app installed, but notification access not granted. Open the app and tap Grant Notification Access.'
+                  : 'Companion app not installed. Build + install companion-app/ to use enterprise WiFi or notification-based OTP capture.',
               },
               null,
               2
@@ -839,6 +847,47 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
       await ensureDevice();
       const sms = deviceManager.getSmsCommands();
       const result = await sms.waitForOtp({ senderFilter, bodyRegex, sinceSeconds, timeoutMs, pollIntervalMs });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  // ============ Notification / OTP Tools (companion app) ============
+
+  mcpServer.tool(
+    'notifications_list_recent',
+    'List recent notifications captured by the companion app (WhatsApp, email, banking apps, etc). Useful for OTPs that do not arrive via SMS. Requires the companion app installed and notification access granted (see wifi_check_companion_app).',
+    {
+      packageFilter: z.string().optional().describe('Regex match against package name, e.g. "com.whatsapp" or "bank"'),
+      bodyRegex: z.string().optional().describe('Regex against title+text. If it has a capture group, that becomes the OTP; else first 4-8 digit run is used'),
+      sinceSeconds: z.number().optional().describe('Only return notifications received within the last N seconds'),
+      limit: z.number().optional().default(50).describe('Max notifications to return (default 50)'),
+    },
+    async ({ packageFilter, bodyRegex, sinceSeconds, limit }) => {
+      await ensureDevice();
+      const notif = deviceManager.getNotificationCommands();
+      const result = await notif.listRecent({ packageFilter, bodyRegex, sinceSeconds, limit });
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  mcpServer.tool(
+    'notifications_wait_for_otp',
+    'Poll captured notifications until a matching OTP arrives or timeout elapses. Default timeout 60s, default poll 2s. Use packageFilter (e.g. "com.whatsapp") to scope.',
+    {
+      packageFilter: z.string().optional().describe('Regex against package name'),
+      bodyRegex: z.string().optional().describe('Regex against title+text. Capture group becomes the OTP if present'),
+      sinceSeconds: z.number().optional().default(60).describe('Initial look-back window (default 60s)'),
+      timeoutMs: z.number().optional().default(60000).describe('Max time to wait in milliseconds (default 60000)'),
+      pollIntervalMs: z.number().optional().default(2000).describe('Poll interval in milliseconds (default 2000)'),
+    },
+    async ({ packageFilter, bodyRegex, sinceSeconds, timeoutMs, pollIntervalMs }) => {
+      await ensureDevice();
+      const notif = deviceManager.getNotificationCommands();
+      const result = await notif.waitForOtp({ packageFilter, bodyRegex, sinceSeconds, timeoutMs, pollIntervalMs });
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };

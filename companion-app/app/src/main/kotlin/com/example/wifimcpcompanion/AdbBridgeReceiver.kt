@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Environment
 import android.util.Log
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -20,6 +21,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         const val ACTION_INSTALL_CERTIFICATE = "com.example.wifimcpcompanion.INSTALL_CERTIFICATE"
         const val ACTION_LIST_CERTIFICATES = "com.example.wifimcpcompanion.LIST_CERTIFICATES"
         const val ACTION_DISCONNECT = "com.example.wifimcpcompanion.DISCONNECT"
+        const val ACTION_LIST_NOTIFICATIONS = "com.example.wifimcpcompanion.LIST_NOTIFICATIONS"
+        const val ACTION_NOTIFICATION_STATUS = "com.example.wifimcpcompanion.NOTIFICATION_STATUS"
 
         const val EXTRA_CONFIG_FILE = "config_file"
 
@@ -42,6 +45,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                 ACTION_INSTALL_CERTIFICATE -> handleInstallCertificate(context, intent)
                 ACTION_LIST_CERTIFICATES -> handleListCertificates(context)
                 ACTION_DISCONNECT -> handleDisconnect(context, intent)
+                ACTION_LIST_NOTIFICATIONS -> handleListNotifications(intent)
+                ACTION_NOTIFICATION_STATUS -> handleNotificationStatus()
                 else -> {
                     Log.w(TAG, "Unknown action: ${intent.action}")
                     writeResult(false, "Unknown action", mapOf("action" to (intent.action ?: "null")))
@@ -184,6 +189,62 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         )
     }
 
+    private fun handleListNotifications(intent: Intent) {
+        // Optional filter params from the command file (sinceMs, packageFilter, limit).
+        val configFile = intent.getStringExtra(EXTRA_CONFIG_FILE)
+        val cfg = configFile?.let { readConfigFile(it) }
+        val sinceMs = cfg?.optLong("sinceMs", 0L) ?: 0L
+        val packageFilter = cfg?.optString("packageFilter", null)
+        val limit = cfg?.optInt("limit", 50) ?: 50
+
+        if (!NotificationCaptureService.listenerConnected) {
+            writeResult(
+                false,
+                "NotificationCaptureService is not connected. Has notification access been granted? See Settings → Notifications → Notification access.",
+                mapOf("action" to "list_notifications")
+            )
+            return
+        }
+
+        val packageRegex = packageFilter?.let { Regex(it, RegexOption.IGNORE_CASE) }
+        val matches = NotificationCaptureService.captured
+            .asSequence()
+            .filter { it.timestamp >= sinceMs }
+            .filter { packageRegex == null || packageRegex.containsMatchIn(it.packageName) }
+            .take(limit)
+            .map { n ->
+                mapOf(
+                    "packageName" to n.packageName,
+                    "title" to n.title,
+                    "text" to n.text,
+                    "timestamp" to n.timestamp
+                )
+            }
+            .toList()
+
+        writeResult(
+            true,
+            "Returned ${matches.size} notification(s)",
+            mapOf(
+                "action" to "list_notifications",
+                "count" to matches.size,
+                "notifications" to matches
+            )
+        )
+    }
+
+    private fun handleNotificationStatus() {
+        writeResult(
+            true,
+            if (NotificationCaptureService.listenerConnected) "Notification listener connected" else "Notification access not granted",
+            mapOf(
+                "action" to "notification_status",
+                "listenerConnected" to NotificationCaptureService.listenerConnected,
+                "capturedCount" to NotificationCaptureService.captured.size
+            )
+        )
+    }
+
     private fun handleListCertificates(context: Context) {
         val certManager = CertificateManager(context)
         val certificates = certManager.listCertificates()
@@ -240,7 +301,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                 put("message", message)
                 put("timestamp", System.currentTimeMillis())
                 extra.forEach { (key, value) ->
-                    put(key, value)
+                    put(key, toJson(value))
                 }
             }
 
@@ -249,6 +310,20 @@ class AdbBridgeReceiver : BroadcastReceiver() {
             Log.i(TAG, "Result written to ${RESULT_FILE.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write result file", e)
+        }
+    }
+
+    /** Recursively wrap nested Map / Collection in JSONObject / JSONArray so they serialize properly. */
+    private fun toJson(value: Any?): Any? {
+        return when (value) {
+            null -> JSONObject.NULL
+            is Map<*, *> -> JSONObject().apply {
+                value.forEach { (k, v) -> if (k != null) put(k.toString(), toJson(v)) }
+            }
+            is Collection<*> -> JSONArray().apply {
+                value.forEach { put(toJson(it)) }
+            }
+            else -> value
         }
     }
 }
