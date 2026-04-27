@@ -113,15 +113,8 @@ export class UpstreamProxy {
     );
   }
 
-  /**
-   * Decide the final tool name in our merged namespace.
-   * Prefer the upstream's name; on collision, prefix with `<upstream>__`.
-   */
   private resolveToolName(upstreamName: string, toolName: string): string {
-    if (!this.nativeToolNames.has(toolName) && !this.toolToUpstream.has(toolName)) {
-      return toolName;
-    }
-    return `${upstreamName}__${toolName}`;
+    return resolveToolName(upstreamName, toolName, this.nativeToolNames, new Set(this.toolToUpstream.keys()));
   }
 
   hasTool(name: string): boolean {
@@ -209,12 +202,33 @@ export class UpstreamProxy {
 }
 
 /**
+ * Decide the final tool name in our merged namespace.
+ * Prefer the upstream's name; on collision (with native or another upstream's
+ * already-registered tool), prefix with `<upstream>__`.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function resolveToolName(
+  upstreamName: string,
+  toolName: string,
+  nativeToolNames: ReadonlySet<string>,
+  alreadyTaken: ReadonlySet<string>
+): string {
+  if (!nativeToolNames.has(toolName) && !alreadyTaken.has(toolName)) {
+    return toolName;
+  }
+  return `${upstreamName}__${toolName}`;
+}
+
+/**
  * Apply per-upstream env-var overrides. Today only one is recognized:
  * `PLAYWRIGHT_HEADED=1` — when set, strips `--headless` from the args of any
  * upstream named `playwright`. Lets users flip @playwright/mcp's window
  * visibility without re-running `claude mcp add`.
+ *
+ * Exported for unit testing.
  */
-function applyEnvOverrides(config: UpstreamConfig): UpstreamConfig {
+export function applyEnvOverrides(config: UpstreamConfig): UpstreamConfig {
   if (config.name !== 'playwright') return config;
   const flag = process.env.PLAYWRIGHT_HEADED;
   if (!flag || flag === '0' || flag.toLowerCase() === 'false') return config;

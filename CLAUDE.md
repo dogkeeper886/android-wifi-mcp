@@ -53,6 +53,8 @@ Test cases live in `cicd/tests/testcases/<suite>/TC-<SUITE>-NNN.yml`. Suites: `s
 
 To add a test, use the **`ci-testcase`** project skill (`.claude/skills/ci-testcase/SKILL.md`). To run, `cd cicd/tests && npm test [-- --suite <s>]` or use the `ci-run` skill.
 
+**Unit tests** live under `tests/unit/*.test.mjs` (separate from the YAML integration suite). They use Node's built-in `node:test` runner and import from compiled `dist/`. Run with `npm run test:unit` from the repo root after `npm run build`. Currently cover `parseUpstreamConfig`, `applyEnvOverrides`, and `resolveToolName` in `src/mcp/upstream-proxy.ts`.
+
 ## Tool surface
 
 30 native tools across 6 categories (`device_*`, `wifi_*`, `wifi_*_enterprise`, `network_*`, `device_*` UI, `sms_*`). With `UPSTREAM_MCP=playwright=...` set, an additional 21 `browser_*` tools from `@playwright/mcp` are proxied through — **51 total**.
