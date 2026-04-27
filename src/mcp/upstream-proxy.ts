@@ -55,8 +55,9 @@ export class UpstreamProxy {
    */
   async connectAll(configs: UpstreamConfig[], nativeToolNames: string[]): Promise<void> {
     this.nativeToolNames = new Set(nativeToolNames);
+    const adjusted = configs.map((c) => applyEnvOverrides(c));
 
-    for (const config of configs) {
+    for (const config of adjusted) {
       const entry: UpstreamEntry = {
         config,
         status: {
@@ -205,6 +206,20 @@ export class UpstreamProxy {
     });
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }
+}
+
+/**
+ * Apply per-upstream env-var overrides. Today only one is recognized:
+ * `PLAYWRIGHT_HEADED=1` — when set, strips `--headless` from the args of any
+ * upstream named `playwright`. Lets users flip @playwright/mcp's window
+ * visibility without re-running `claude mcp add`.
+ */
+function applyEnvOverrides(config: UpstreamConfig): UpstreamConfig {
+  if (config.name !== 'playwright') return config;
+  const flag = process.env.PLAYWRIGHT_HEADED;
+  if (!flag || flag === '0' || flag.toLowerCase() === 'false') return config;
+  if (!config.args?.includes('--headless')) return config;
+  return { ...config, args: config.args.filter((a) => a !== '--headless') };
 }
 
 /**

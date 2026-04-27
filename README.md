@@ -379,6 +379,14 @@ If an upstream's tool name clashes with a native tool or another upstream's tool
 
 The HTTP `/health` endpoint reports per-upstream state (`connected` / `disconnected` / `failed`, plus `toolCount` and the last error). Stdio mode logs the same to stderr at startup.
 
+### Per-upstream env overrides
+
+Recognized today:
+
+| Env var | Effect |
+|---|---|
+| `PLAYWRIGHT_HEADED=1` | Strips `--headless` from the args of an upstream named `playwright` at startup so Chromium runs visible. Saves having to rewrite `UPSTREAM_MCP` and re-register the server. |
+
 ### Lifecycle
 
 Upstreams start eagerly at server boot. On `SIGINT` / `SIGTERM` the server closes all upstream subprocesses cleanly.
