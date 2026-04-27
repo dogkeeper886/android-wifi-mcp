@@ -1,5 +1,6 @@
 import { DeviceManager } from './adb/device-manager.js';
 import { createMcpServer } from './server.js';
+import { UpstreamProxy, parseUpstreamConfig } from './mcp/upstream-proxy.js';
 
 const useStdio = process.argv.includes('--stdio');
 
@@ -11,10 +12,12 @@ if (useStdio) {
 }
 
 const deviceManager = new DeviceManager();
-const mcpServer = createMcpServer(deviceManager);
+const { server: mcpServer, nativeToolNames } = createMcpServer(deviceManager);
+const upstreamProxy = new UpstreamProxy();
 
 const shutdown = async () => {
   console.log('Shutting down...');
+  await upstreamProxy.closeAll().catch(() => {});
   process.exit(0);
 };
 
@@ -38,10 +41,19 @@ async function initDevice(): Promise<void> {
   }
 }
 
+async function initUpstreamProxy(): Promise<void> {
+  const configs = parseUpstreamConfig(process.env.UPSTREAM_MCP);
+  if (configs.length === 0) return;
+  console.log(`Connecting ${configs.length} upstream MCP server(s)...`);
+  await upstreamProxy.connectAll(configs, nativeToolNames);
+  upstreamProxy.attach(mcpServer);
+}
+
 async function startStdio(): Promise<void> {
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
 
   await initDevice();
+  await initUpstreamProxy();
 
   const transport = new StdioServerTransport();
   await mcpServer.connect(transport);
@@ -94,10 +106,12 @@ async function startHttp(): Promise<void> {
       version: '1.0.0',
       adb: adbAvailable,
       connectedDevices: deviceCount,
+      upstreams: upstreamProxy.getStatus(),
     });
   });
 
   await initDevice();
+  await initUpstreamProxy();
 
   const PORT = process.env.PORT || 3000;
   const HOST = process.env.HOST || '0.0.0.0';

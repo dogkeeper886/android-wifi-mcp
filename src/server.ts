@@ -5,11 +5,26 @@ import { NetworkCheck } from './network/network-check.js';
 import { EnterpriseWifiCommands } from './adb/enterprise-wifi.js';
 import { SecurityType, EapMethod, Phase2Method } from './types.js';
 
-export function createMcpServer(deviceManager: DeviceManager): McpServer {
+export interface CreateServerResult {
+  server: McpServer;
+  nativeToolNames: string[];
+}
+
+export function createMcpServer(deviceManager: DeviceManager): CreateServerResult {
   const mcpServer = new McpServer({
     name: 'android-wifi-mcp',
     version: '1.0.0',
   });
+  const nativeToolNames: string[] = [];
+
+  // Wrap mcpServer.tool to also collect names so the upstream proxy can
+  // detect collisions without reaching into McpServer internals.
+  const originalTool = mcpServer.tool.bind(mcpServer);
+  mcpServer.tool = ((name: string, ...rest: unknown[]) => {
+    nativeToolNames.push(name);
+    // @ts-expect-error — pass-through to the wrapped overloaded method.
+    return originalTool(name, ...rest);
+  }) as typeof mcpServer.tool;
 
   async function ensureDevice(): Promise<void> {
     await deviceManager.ensureDeviceSelected();
@@ -830,5 +845,5 @@ export function createMcpServer(deviceManager: DeviceManager): McpServer {
     }
   );
 
-  return mcpServer;
+  return { server: mcpServer, nativeToolNames };
 }

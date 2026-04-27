@@ -347,6 +347,40 @@ where adb  # Windows
 - Check `wifi_check_companion_app` returns success
 - Verify the domain suffix match is correct for your RADIUS server
 
+## Proxying upstream MCPs
+
+This server can spawn other MCP servers as subprocesses and surface their tools through its own tool list, so Claude Code only needs **one MCP registration** to access device + WiFi + SMS + UI primitives + browser automation. The canonical example is composing with Microsoft's [`@playwright/mcp`](https://www.npmjs.com/package/@playwright/mcp) for DOM-level browser control.
+
+### How to enable
+
+Set the `UPSTREAM_MCP` environment variable. Two accepted formats:
+
+```bash
+# Shorthand: name=command [args...] ; ... (semicolon-separated for multiple)
+UPSTREAM_MCP="playwright=npx -y @playwright/mcp@latest --headless"
+
+# JSON: an array of { name, command, args?, env? }
+UPSTREAM_MCP='[{"name":"playwright","command":"npx","args":["-y","@playwright/mcp@latest"]}]'
+```
+
+On startup the server spawns each upstream over stdio, fetches its `tools/list`, and registers every tool on its own surface. A call to a proxied tool is forwarded transparently — the client sees one server.
+
+### Tool name collisions
+
+If an upstream's tool name clashes with a native tool or another upstream's tool, the proxy prefixes it with `<upstream-name>__`. Example: a hypothetical second `device_list` from an upstream named `playwright` becomes `playwright__device_list`.
+
+### Health observability
+
+The HTTP `/health` endpoint reports per-upstream state (`connected` / `disconnected` / `failed`, plus `toolCount` and the last error). Stdio mode logs the same to stderr at startup.
+
+### Lifecycle
+
+Upstreams start eagerly at server boot. On `SIGINT` / `SIGTERM` the server closes all upstream subprocesses cleanly.
+
+### Verified composition
+
+The default `UPSTREAM_MCP` in `.env.example` is `@playwright/mcp` — running our server with that set yields **51 total tools** (30 native + 21 from `@playwright/mcp`), all reachable from one MCP endpoint. See `cicd/tests/testcases/proxy/TC-PROXY-002.yml` for the end-to-end smoke test.
+
 ## Testing
 
 YAML-driven test framework under `cicd/tests/` runs against an attached Android device using the stdio transport.
@@ -411,6 +445,8 @@ android-wifi-mcp/
 │   ├── index.ts                # Entry — picks transport (HTTP / stdio)
 │   ├── server.ts               # MCP server factory + tool registrations
 │   ├── types.ts                # TypeScript interfaces
+│   ├── mcp/
+│   │   └── upstream-proxy.ts   # Spawn + proxy other MCP servers (@playwright/mcp etc.)
 │   ├── adb/
 │   │   ├── adb-client.ts       # ADB command wrapper
 │   │   ├── device-manager.ts   # Multi-device handling

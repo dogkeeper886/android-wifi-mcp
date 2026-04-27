@@ -1,0 +1,28 @@
+id: TC-PROXY-002
+name: Proxy exposes @playwright/mcp browser_navigate via host Chromium
+suite: proxy
+tags: [proxy, playwright]
+priority: 2
+timeout: 180000
+dependencies: []
+
+steps:
+  - name: browser_navigate to https://example.com via the proxied playwright server
+    command: |
+      UPSTREAM_MCP='playwright=npx -y @playwright/mcp@latest --headless' \
+        npx tsx cicd/tests/src/mcp-client.ts browser_navigate '{"url":"https://example.com"}'
+    timeout: 150000
+    expectPatterns:
+      - "Page URL"
+      - "example.com"
+      - "Example Domain"
+    rejectPatterns:
+      - "isError"
+      - "Unknown tool"
+
+criteria: |
+  Verify the proxy works with a real upstream MCP (@playwright/mcp).
+  - First run downloads @playwright/mcp + browsers if not cached (longer timeout)
+  - Our server spawns it as an upstream and registers all 21 browser_* tools
+  - browser_navigate to https://example.com returns Page URL and Page Title
+  - This validates the canonical use case: device + WiFi + browser via one MCP endpoint
