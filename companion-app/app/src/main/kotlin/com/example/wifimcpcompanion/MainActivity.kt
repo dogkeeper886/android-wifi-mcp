@@ -1,9 +1,11 @@
 package com.example.wifimcpcompanion
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -22,6 +24,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
     private lateinit var permissionButton: Button
+    private lateinit var notificationStatusText: TextView
+    private lateinit var notificationAccessButton: Button
 
     private val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         arrayOf(
@@ -46,17 +50,38 @@ class MainActivity : AppCompatActivity() {
 
         statusText = findViewById(R.id.statusText)
         permissionButton = findViewById(R.id.permissionButton)
+        notificationStatusText = findViewById(R.id.notificationStatusText)
+        notificationAccessButton = findViewById(R.id.notificationAccessButton)
 
         permissionButton.setOnClickListener {
             requestPermissions()
         }
 
+        notificationAccessButton.setOnClickListener {
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+        }
+
         checkPermissions()
+        updateNotificationAccessStatus()
     }
 
     override fun onResume() {
         super.onResume()
         checkPermissions()
+        updateNotificationAccessStatus()
+    }
+
+    private fun updateNotificationAccessStatus() {
+        val enabledListeners =
+            Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: ""
+        val granted = enabledListeners.contains(packageName)
+        if (granted) {
+            notificationStatusText.text = getString(R.string.notification_access_status_on)
+            notificationAccessButton.visibility = android.view.View.GONE
+        } else {
+            notificationStatusText.text = getString(R.string.notification_access_status_off)
+            notificationAccessButton.visibility = android.view.View.VISIBLE
+        }
     }
 
     private fun checkPermissions() {

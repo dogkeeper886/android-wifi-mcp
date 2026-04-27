@@ -1,0 +1,25 @@
+id: TC-NOTIF-002
+name: notifications_wait_for_otp returns cleanly on short timeout
+suite: notifications
+tags: [notifications]
+priority: 2
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Wait briefly for an OTP that may not arrive
+    command: npx tsx cicd/tests/src/mcp-client.ts notifications_wait_for_otp '{"timeoutMs":3000,"pollIntervalMs":500,"packageFilter":"unlikely-test-only-package"}'
+    expectPatterns:
+      - "found"
+      - "waitedMs"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify notifications_wait_for_otp returns cleanly on timeout.
+  - Tool accepts timeoutMs, pollIntervalMs, packageFilter
+  - Response always contains found and waitedMs fields
+  - The unlikely package filter ensures the timeout path is exercised
+    without depending on the absence of any captured notifications
+  - When a real OTP does arrive, the response carries otp + packageName
+    + title + text

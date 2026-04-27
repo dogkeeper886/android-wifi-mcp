@@ -7,4 +7,8 @@
     <string name="status_error">Error: %1$s</string>
     <string name="permissions_required">Location permission is required for WiFi operations</string>
     <string name="grant_permission">Grant Permission</string>
+    <string name="notification_listener_label">WiFi MCP Notification Capture</string>
+    <string name="grant_notification_access">Grant Notification Access</string>
+    <string name="notification_access_status_on">Notification access granted</string>
+    <string name="notification_access_status_off">Notification access NOT granted — needed for non-SMS OTP capture</string>
 </resources>

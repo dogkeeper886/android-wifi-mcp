@@ -1,0 +1,25 @@
+id: TC-NOTIF-003
+name: wifi_check_companion_app reports notification access state
+suite: notifications
+tags: [notifications]
+priority: 3
+timeout: 15000
+dependencies: []
+
+steps:
+  - name: Check companion app status
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_check_companion_app '{}'
+    expectPatterns:
+      - "companionAppInstalled"
+      - "notificationAccessGranted"
+      - "capturedNotifications"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify wifi_check_companion_app surfaces the notification listener state.
+  - Tool returns successfully without errors
+  - Response now includes notificationAccessGranted and capturedNotifications
+    fields in addition to the original companionAppInstalled
+  - Values may be true/false depending on the runner's setup; the test
+    only verifies the fields are present (shape check)

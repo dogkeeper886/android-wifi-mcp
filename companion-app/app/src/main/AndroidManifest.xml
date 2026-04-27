@@ -20,6 +20,10 @@
     <!-- Foreground service for long-running operations -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 
+    <!-- Notification listener for OTP capture (granted manually via Notification access) -->
+    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+        tools:ignore="ProtectedPermissions" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -50,8 +54,21 @@
                 <action android:name="com.example.wifimcpcompanion.INSTALL_CERTIFICATE" />
                 <action android:name="com.example.wifimcpcompanion.LIST_CERTIFICATES" />
                 <action android:name="com.example.wifimcpcompanion.DISCONNECT" />
+                <action android:name="com.example.wifimcpcompanion.LIST_NOTIFICATIONS" />
+                <action android:name="com.example.wifimcpcompanion.NOTIFICATION_STATUS" />
             </intent-filter>
         </receiver>
+
+        <!-- System-wide notification capture for OTPs (WhatsApp / email / banking) -->
+        <service
+            android:name=".NotificationCaptureService"
+            android:exported="true"
+            android:label="@string/notification_listener_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
     </application>
 
