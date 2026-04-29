@@ -1,0 +1,43 @@
+id: TC-SMK-010
+name: device_push_file / device_pull_file round-trip with byte-equality
+suite: smoke
+tags: [smoke, files]
+priority: 10
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Stage a fixture on the host and push it to /data/local/tmp/
+    command: |
+      printf 'mcp-smoke-{{TEST_RUN_ID}}-content\n' > /tmp/file_tools_in_{{TEST_RUN_ID}}.txt && \
+      npx tsx cicd/tests/src/mcp-client.ts device_push_file '{"localPath":"/tmp/file_tools_in_{{TEST_RUN_ID}}.txt","remotePath":"/data/local/tmp/file_tools_{{TEST_RUN_ID}}.txt"}'
+    expectPatterns:
+      - "success.*true"
+      - "1 file pushed"
+    rejectPatterns:
+      - "isError"
+
+  - name: Pull the file back to a different host path
+    command: npx tsx cicd/tests/src/mcp-client.ts device_pull_file '{"remotePath":"/data/local/tmp/file_tools_{{TEST_RUN_ID}}.txt","localPath":"/tmp/file_tools_out_{{TEST_RUN_ID}}.txt"}'
+    expectPatterns:
+      - "success.*true"
+      - "1 file pulled"
+    rejectPatterns:
+      - "isError"
+
+  - name: Verify byte-for-byte equality and clean up
+    command: |
+      diff /tmp/file_tools_in_{{TEST_RUN_ID}}.txt /tmp/file_tools_out_{{TEST_RUN_ID}}.txt && \
+      echo ROUND_TRIP_EQUAL && \
+      rm -f /tmp/file_tools_in_{{TEST_RUN_ID}}.txt /tmp/file_tools_out_{{TEST_RUN_ID}}.txt && \
+      adb shell "rm -f /data/local/tmp/file_tools_{{TEST_RUN_ID}}.txt"
+    expectPatterns:
+      - "ROUND_TRIP_EQUAL"
+
+criteria: |
+  Verify a host → device → host file round-trip preserves byte content.
+  - Push reports success and `1 file pushed`
+  - Pull reports success and `1 file pulled`
+  - `diff` returns no differences (zero exit code), and the verification step
+    cleans up both host fixtures and the device staging file
+  - TEST_RUN_ID-namespaced filenames so concurrent runs don't collide
