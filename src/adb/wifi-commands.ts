@@ -211,13 +211,20 @@ export class WifiCommands {
       // Re-enabling the radio doesn't always drive re-association on
       // its own — the device can sit with state CONNECTED but
       // ssid=<unknown ssid>, rssi=-127. Explicitly ask the framework
-      // to reconnect to the last saved network after the toggle so
-      // the caller doesn't have to tap the SSID in the device UI.
+      // to reconnect to the last saved network, then poll until the
+      // tightened getStatus() reports a real association so the caller
+      // gets a deterministic success/timeout signal instead of a fixed
+      // wait that may be too short on slower devices.
       await this.setEnabled(false);
       await new Promise(resolve => setTimeout(resolve, 1000));
       await this.setEnabled(true);
-      await new Promise(resolve => setTimeout(resolve, 1500));
       await this.adb.shell('cmd wifi reconnect');
+      const deadline = Date.now() + 8000;
+      while (Date.now() < deadline) {
+        const s = await this.getStatus();
+        if (s.connected) return;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
   }
 
