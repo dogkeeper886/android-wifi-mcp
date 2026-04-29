@@ -124,13 +124,14 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
       await ensureDevice();
       const settings = deviceManager.getSettingsCommands();
       const result = await settings.get(namespace, key);
+      if (result.error) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          isError: true,
+        };
+      }
       return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     }
   );
@@ -164,6 +165,29 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
             text: JSON.stringify(result, null, 2),
           },
         ],
+        isError: true,
+      };
+    }
+  );
+
+  mcpServer.tool(
+    'device_settings_delete',
+    'Delete a key from the Android settings provider via `adb shell settings delete`. Subsequent gets return value: null. Same permission rules as device_settings_put.',
+    {
+      namespace: z.enum(['system', 'secure', 'global']).describe('Settings namespace'),
+      key: z.string().describe('Setting key to delete'),
+    },
+    async ({ namespace, key }) => {
+      await ensureDevice();
+      const settings = deviceManager.getSettingsCommands();
+      const result = await settings.delete(namespace, key);
+      if (result.success) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
         isError: true,
       };
     }

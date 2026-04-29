@@ -6,12 +6,20 @@ export interface SettingsGetResult {
   namespace: SettingsNamespace;
   key: string;
   value: string | null;
+  error?: string;
 }
 
 export interface SettingsPutResult {
   namespace: SettingsNamespace;
   key: string;
   value: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface SettingsDeleteResult {
+  namespace: SettingsNamespace;
+  key: string;
   success: boolean;
   error?: string;
 }
@@ -35,7 +43,12 @@ export class SettingsCommands {
   async get(namespace: SettingsNamespace, key: string): Promise<SettingsGetResult> {
     const result = await this.adb.shell(`settings get ${namespace} ${shellQuote(key)}`);
     if (!result.success) {
-      throw new Error(`settings get failed: ${result.stderr || result.stdout}`);
+      return {
+        namespace,
+        key,
+        value: null,
+        error: result.stderr || result.stdout || 'Unknown error',
+      };
     }
     const trimmed = result.stdout.trim();
     // `settings get` prints the literal string "null" when the key is unset.
@@ -57,6 +70,19 @@ export class SettingsCommands {
       };
     }
     return { namespace, key, value, success: true };
+  }
+
+  async delete(namespace: SettingsNamespace, key: string): Promise<SettingsDeleteResult> {
+    const result = await this.adb.shell(`settings delete ${namespace} ${shellQuote(key)}`);
+    if (!result.success) {
+      return {
+        namespace,
+        key,
+        success: false,
+        error: result.stderr || result.stdout || 'Unknown error',
+      };
+    }
+    return { namespace, key, success: true };
   }
 }
 
