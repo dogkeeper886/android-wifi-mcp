@@ -18,9 +18,9 @@ Claude Code  ──MCP──►  android-wifi-mcp (this server)  ──ADB──
 ```
 
 - **Server entrypoint:** `src/index.ts` picks transport (HTTP default, `--stdio` for stdio).
-- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 36 native tools.
+- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 28 native tools.
 - **Proxy:** `src/mcp/upstream-proxy.ts` spawns upstream MCP subprocesses on startup and merges their tools into one tools/list. Configured via `UPSTREAM_MCP` env var.
-- **ADB layer:** `src/adb/` — `adb-client.ts` (process wrapper), `device-manager.ts` (multi-device), then per-domain wrappers: `wifi-commands.ts`, `ui-commands.ts`, `sms-commands.ts`, `enterprise-wifi.ts`, `settings-commands.ts`, `file-commands.ts`.
+- **ADB layer:** `src/adb/` — `adb-client.ts` (process wrapper), `device-manager.ts` (multi-device), then per-domain wrappers: `wifi-commands.ts`, `screenshot-commands.ts`, `sms-commands.ts`, `enterprise-wifi.ts`, `settings-commands.ts`, `file-commands.ts`.
 - **Companion app:** `companion-app/` — Kotlin Android app that handles 802.1X enterprise WiFi (the only flow that needs an on-device daemon today).
 - **Network helpers:** `src/network/network-check.ts`.
 - **Test framework:** `cicd/tests/` — custom YAML-driven runner. See "Tests" below.
@@ -41,7 +41,7 @@ YAML-driven framework under `cicd/tests/`, ported from `ruckus1-mcp` and adapted
 - **`cicd/tests/src/executor.ts`** — runs each test step as a shell command, captures stdout/stderr, applies `expectPatterns` / `rejectPatterns`. **Per-test** snapshot/restore of WiFi state via `device-state.ts` so a failing test cannot poison the next.
 - **`cicd/tests/src/mcp-client.ts`** — spawns `node dist/index.js --stdio`, calls one tool, prints JSON result.
 
-Test cases live in `cicd/tests/testcases/<suite>/TC-<SUITE>-NNN.yml`. Suites: `smoke` (read-only), `ui`, `sms`, `proxy`, plus pending `wifi`/`enterprise`/`portal`. Each test step runs `npx tsx cicd/tests/src/mcp-client.ts <tool> '<args>'`.
+Test cases live in `cicd/tests/testcases/<suite>/TC-<SUITE>-NNN.yml`. Suites: `smoke` (read-only + roundtrips), `sms`, `notifications`, `proxy`, plus pending `wifi`/`enterprise`/`portal`. Each test step runs `npx tsx cicd/tests/src/mcp-client.ts <tool> '<args>'`.
 
 **Pattern-matching gotcha:** `mcp-client.ts` returns double-encoded JSON (the tool's JSON is inside a `text` field with escaped quotes). **Use bare strings** in patterns:
 - ✅ `connected.*true`, `hasInternet.*true`
@@ -57,7 +57,7 @@ To add a test, use the **`ci-testcase`** project skill (`.claude/skills/ci-testc
 
 ## Tool surface
 
-36 native tools across 8 categories (`device_*` mgmt, `device_settings_*`, `device_*_file`, `wifi_*`, `wifi_*_enterprise`, `network_*`, `device_*` UI, `sms_*`). With `UPSTREAM_MCP=playwright=...` set, an additional 21 `browser_*` tools from `@playwright/mcp` are proxied through — **57 total**.
+28 native tools across 7 categories (`device_*` mgmt, `device_settings_*`, `device_*_file`, `wifi_*`, `wifi_*_enterprise`, `network_*`, `sms_*` / `notifications_*`). Generic UI automation (`device_tap` / `device_swipe` / `device_keyevent` / `device_type_text` / `device_open_url` / `device_launch_app` / `device_list_packages` / `device_ui_dump`) was intentionally removed in #20 — compose with [`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp) for selector-based UI work and `playwright-android` for browser DOM. With `UPSTREAM_MCP=playwright=...` set, an additional 21 `browser_*` tools from `@playwright/mcp` are proxied through — **49 total**.
 
 The unified namespace is the design goal: Claude Code sees one server, gets one tools/list. Don't add a feature here that exists in a mature upstream — proxy it instead. (#10 was closed and #14 implemented for exactly this reason.)
 
