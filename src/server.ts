@@ -172,7 +172,7 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
 
   mcpServer.tool(
     'device_settings_delete',
-    'Delete a key from the Android settings provider via `adb shell settings delete`. Subsequent gets return value: null. Same permission rules as device_settings_put.',
+    'Delete a key from the Android settings provider via `adb shell settings delete`. Subsequent gets return value: null. Same permission rules as device_settings_put. Idempotent — calling on a missing key still returns success: true.',
     {
       namespace: z.enum(['system', 'secure', 'global']).describe('Settings namespace'),
       key: z.string().describe('Setting key to delete'),

@@ -25,8 +25,8 @@ export interface SettingsDeleteResult {
 }
 
 /**
- * Read and write entries in Android's settings provider via
- * `adb shell settings get|put <namespace> <key> [<value>]`.
+ * Read, write, and delete entries in Android's settings provider via
+ * `adb shell settings get|put|delete <namespace> <key> [<value>]`.
  *
  * Three namespaces — `system` (user prefs), `secure` (security/auth), `global`
  * (device-wide). The ADB shell user holds `WRITE_SECURE_SETTINGS` by default
