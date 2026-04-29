@@ -3,11 +3,12 @@ import { WifiCommands } from './wifi-commands.js';
 import { UICommands } from './ui-commands.js';
 import { SmsCommands } from './sms-commands.js';
 import { NotificationCommands } from './notifications-commands.js';
+import { SettingsCommands } from './settings-commands.js';
 import { Device, DeviceInfo } from '../types.js';
 
 /**
  * Manages connected Android devices and provides unified access
- * to ADB, WiFi, UI, SMS, and notification commands.
+ * to ADB, WiFi, UI, SMS, notification, and settings commands.
  */
 export class DeviceManager {
   private adb: AdbClient;
@@ -15,6 +16,7 @@ export class DeviceManager {
   private ui: UICommands;
   private sms: SmsCommands;
   private notifications: NotificationCommands;
+  private settings: SettingsCommands;
   private devices: Map<string, DeviceInfo> = new Map();
 
   constructor(adbPath?: string) {
@@ -23,6 +25,7 @@ export class DeviceManager {
     this.ui = new UICommands(this.adb);
     this.sms = new SmsCommands(this.adb);
     this.notifications = new NotificationCommands(this.adb);
+    this.settings = new SettingsCommands(this.adb);
   }
 
   /**
@@ -58,6 +61,13 @@ export class DeviceManager {
    */
   getNotificationCommands(): NotificationCommands {
     return this.notifications;
+  }
+
+  /**
+   * Get the settings commands instance
+   */
+  getSettingsCommands(): SettingsCommands {
+    return this.settings;
   }
 
   /**

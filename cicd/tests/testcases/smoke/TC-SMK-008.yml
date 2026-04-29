@@ -1,0 +1,24 @@
+id: TC-SMK-008
+name: device_settings_get reads a known global setting
+suite: smoke
+tags: [smoke, settings]
+priority: 8
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Read airplane_mode_on from the global namespace
+    command: npx tsx cicd/tests/src/mcp-client.ts device_settings_get '{"namespace":"global","key":"airplane_mode_on"}'
+    expectPatterns:
+      - "namespace.*global"
+      - "key.*airplane_mode_on"
+      - "value"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify device_settings_get reads `airplane_mode_on` from the global settings namespace.
+  - Tool returns successfully without errors
+  - Response includes the namespace, key, and value fields
+  - Confirms the host can shell out to `adb shell settings get` and parse the result
+  - Does not assert a specific value (0 or 1) — just that read works
