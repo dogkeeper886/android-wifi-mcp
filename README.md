@@ -518,7 +518,9 @@ android-wifi-mcp/
 │   │   ├── adb-client.ts       # ADB command wrapper
 │   │   ├── device-manager.ts   # Multi-device handling
 │   │   ├── wifi-commands.ts    # cmd wifi wrapper
-│   │   ├── ui-commands.ts      # input / am start / screencap / uiautomator
+│   │   ├── screenshot-commands.ts # screencap wrapper
+│   │   ├── settings-commands.ts   # adb shell settings get/put
+│   │   ├── file-commands.ts       # adb push / adb pull
 │   │   ├── sms-commands.ts     # SMS read / OTP polling via content provider
 │   │   ├── notifications-commands.ts # Notification capture via companion app
 │   │   └── enterprise-wifi.ts  # 802.1X enterprise WiFi
@@ -527,6 +529,8 @@ android-wifi-mcp/
 ├── companion-app/              # Android companion app for 802.1X
 │   ├── app/src/main/kotlin/    # Kotlin source files
 │   └── build.gradle.kts        # Gradle build config
+├── docs/
+│   └── integrations/           # Notes on composing with mobile-mcp / playwright-android
 ├── cicd/
 │   ├── tests/                  # YAML-driven test framework (see Testing)
 │   │   ├── src/
@@ -536,10 +540,10 @@ android-wifi-mcp/
 │   │   │   ├── mcp-client.ts   # stdio MCP client
 │   │   │   ├── loader.ts, judge/, reporter/, types.ts, config.ts
 │   │   │   └── ...
-│   │   ├── testcases/<suite>/  # smoke, ui, sms, notifications, proxy (wifi/enterprise/portal pending)
+│   │   ├── testcases/<suite>/  # smoke, sms, notifications, proxy (wifi/enterprise/portal pending)
 │   │   └── fixtures/           # mock-mcp-upstream.mjs (used by TC-PROXY-001)
 │   └── results/                # JSON per-run results
-├── .github/workflows/          # build.yml, test-run.yml, test-{smoke,ui,sms,notifications,proxy}.yml, ci.yml
+├── .github/workflows/          # build.yml, test-run.yml, test-{smoke,sms,notifications,proxy}.yml, ci.yml
 ├── .claude/skills/             # ci-testcase, ci-run
 ├── .env.example
 ├── package.json
