@@ -1,4 +1,5 @@
 import { AdbClient } from './adb-client.js';
+import { CompanionAppBridge, COMPANION_PACKAGE } from './companion-bridge.js';
 import {
   EapConfig,
   EapMethod,
@@ -6,21 +7,13 @@ import {
   CertificateInstallResult,
 } from '../types.js';
 
-const COMPANION_PACKAGE = 'com.example.wifimcpcompanion';
-// IPC files live in the companion app's private filesDir, accessed via
-// `run-as`. /sdcard/Download/ was the previous location but Android 11+
-// scoped storage blocks the app from reading shell-written files there.
-const COMMAND_FILE_NAME = 'wifi_mcp_command.json';
-const RESULT_FILE_NAME = 'wifi_mcp_result.json';
-const RESULT_FILE_REL = `files/${RESULT_FILE_NAME}`;
-const COMMAND_FILE_REL = `files/${COMMAND_FILE_NAME}`;
-const RESULT_TIMEOUT = 30000; // 30 seconds
-
 export class EnterpriseWifiCommands {
   private adb: AdbClient;
+  private bridge: CompanionAppBridge;
 
   constructor(adb: AdbClient) {
     this.adb = adb;
+    this.bridge = new CompanionAppBridge(adb, { resultTimeoutMs: 30_000, pollIntervalMs: 500 });
   }
 
   /**
@@ -35,7 +28,6 @@ export class EnterpriseWifiCommands {
    * Connect to an enterprise WiFi network (802.1X/EAP)
    */
   async connectEnterprise(config: EapConfig): Promise<EnterpriseConnectionResult> {
-    // Validate config based on EAP method
     if ((config.eapMethod === 'peap' || config.eapMethod === 'ttls') && !config.password) {
       return {
         success: false,
@@ -54,9 +46,7 @@ export class EnterpriseWifiCommands {
       };
     }
 
-    // Check if companion app is installed
-    const appInstalled = await this.isCompanionAppInstalled();
-    if (!appInstalled) {
+    if (!(await this.isCompanionAppInstalled())) {
       return {
         success: false,
         ssid: config.ssid,
@@ -65,35 +55,21 @@ export class EnterpriseWifiCommands {
       };
     }
 
-    // Write config to file
-    const commandPayload = {
+    const payload = {
       action: 'connect_enterprise',
       timestamp: Date.now(),
       ...config,
     };
+    const { raw, broadcastError } = await this.bridge.sendBroadcastAndWait('CONNECT_ENTERPRISE', payload);
 
-    await this.writeCommandFile(commandPayload);
-    await this.clearResultFile();
-
-    // Send broadcast to companion app
-    const broadcastResult = await this.adb.shell(
-      `am broadcast -a ${COMPANION_PACKAGE}.CONNECT_ENTERPRISE ` +
-      `-n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
-    );
-
-    if (!broadcastResult.success) {
+    if (broadcastError) {
       return {
         success: false,
         ssid: config.ssid,
         eapMethod: config.eapMethod,
-        error: `Failed to send broadcast: ${broadcastResult.stderr}`,
+        error: `Failed to send broadcast: ${broadcastError}`,
       };
     }
-
-    // Wait for result. The companion app emits a wire format with `message`
-    // (and optional `ssid` / `eapMethod`); normalize into our typed result so
-    // `error` is always populated on failure.
-    const raw = await this.waitForResult<Record<string, unknown>>(config.ssid);
     if (!raw) {
       return {
         success: false,
@@ -102,17 +78,8 @@ export class EnterpriseWifiCommands {
         error: 'Timeout waiting for connection result',
       };
     }
-    const success = !!raw.success;
-    return {
-      success,
-      ssid: (typeof raw.ssid === 'string' ? raw.ssid : config.ssid),
-      eapMethod: (typeof raw.eapMethod === 'string' ? raw.eapMethod as EapMethod : config.eapMethod),
-      error: success
-        ? undefined
-        : (typeof raw.error === 'string' ? raw.error
-          : typeof raw.message === 'string' ? raw.message
-          : 'Unknown error'),
-    };
+
+    return normalizeEnterpriseResult(raw, config.ssid, config.eapMethod);
   }
 
   /**
@@ -123,9 +90,7 @@ export class EnterpriseWifiCommands {
     alias: string,
     type: 'ca' | 'client'
   ): Promise<CertificateInstallResult> {
-    // Check if companion app is installed
-    const appInstalled = await this.isCompanionAppInstalled();
-    if (!appInstalled) {
+    if (!(await this.isCompanionAppInstalled())) {
       return {
         success: false,
         alias,
@@ -134,35 +99,23 @@ export class EnterpriseWifiCommands {
       };
     }
 
-    // Write config to file
-    const commandPayload = {
+    const payload = {
       action: 'install_certificate',
       timestamp: Date.now(),
       certificate,
       alias,
       type,
     };
+    const { raw, broadcastError } = await this.bridge.sendBroadcastAndWait('INSTALL_CERTIFICATE', payload);
 
-    await this.writeCommandFile(commandPayload);
-    await this.clearResultFile();
-
-    // Send broadcast to companion app
-    const broadcastResult = await this.adb.shell(
-      `am broadcast -a ${COMPANION_PACKAGE}.INSTALL_CERTIFICATE ` +
-      `-n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
-    );
-
-    if (!broadcastResult.success) {
+    if (broadcastError) {
       return {
         success: false,
         alias,
         type,
-        error: `Failed to send broadcast: ${broadcastResult.stderr}`,
+        error: `Failed to send broadcast: ${broadcastError}`,
       };
     }
-
-    // Wait for result. Normalize companion `message` → our typed `error`.
-    const raw = await this.waitForResult<Record<string, unknown>>(alias);
     if (!raw) {
       return {
         success: false,
@@ -171,91 +124,65 @@ export class EnterpriseWifiCommands {
         error: 'Timeout waiting for certificate installation result',
       };
     }
-    const success = !!raw.success;
-    return {
-      success,
-      alias: (typeof raw.alias === 'string' ? raw.alias : alias),
-      type: (raw.type === 'ca' || raw.type === 'client' ? raw.type : type),
-      error: success
-        ? undefined
-        : (typeof raw.error === 'string' ? raw.error
-          : typeof raw.message === 'string' ? raw.message
-          : 'Unknown error'),
-    };
-  }
 
-  /**
-   * Write command payload into the companion app's private filesDir via run-as.
-   * Payload is base64-encoded so embedded JSON quotes / cert hyphens cannot
-   * break shell escaping.
-   */
-  private async writeCommandFile(payload: object): Promise<void> {
-    const json = JSON.stringify(payload);
-    const b64 = Buffer.from(json, 'utf-8').toString('base64');
-    await this.adb.shell(
-      `run-as ${COMPANION_PACKAGE} sh -c 'echo ${b64} | base64 -d > ${COMMAND_FILE_REL}'`
-    );
-  }
-
-  private async clearResultFile(): Promise<void> {
-    await this.adb.shell(`run-as ${COMPANION_PACKAGE} rm -f ${RESULT_FILE_REL}`);
-  }
-
-  /**
-   * Poll for the result file the companion app writes after handling a broadcast.
-   *
-   * Caller must call `clearResultFile()` between writing the command file and
-   * sending the broadcast. The receiver runs synchronously (~50 ms) so a
-   * post-broadcast cleanup would race the app's write and produce spurious
-   * timeouts.
-   */
-  private async waitForResult<T>(identifier: string): Promise<T | null> {
-    const startTime = Date.now();
-    const pollInterval = 500; // 500ms
-
-    while (Date.now() - startTime < RESULT_TIMEOUT) {
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
-
-      const checkResult = await this.adb.shell(
-        `run-as ${COMPANION_PACKAGE} cat ${RESULT_FILE_REL} 2>/dev/null`
-      );
-      if (checkResult.success && checkResult.stdout.trim()) {
-        try {
-          const result = JSON.parse(checkResult.stdout) as T;
-          await this.clearResultFile();
-          return result;
-        } catch {
-          // JSON not ready yet, continue waiting
-        }
-      }
-    }
-
-    return null;
+    return normalizeCertificateResult(raw, alias, type);
   }
 
   /**
    * Get list of installed certificates (via companion app)
    */
   async listCertificates(): Promise<string[]> {
-    const appInstalled = await this.isCompanionAppInstalled();
-    if (!appInstalled) {
+    if (!(await this.isCompanionAppInstalled())) {
       return [];
     }
 
-    const commandPayload = {
-      action: 'list_certificates',
-      timestamp: Date.now(),
-    };
-
-    await this.writeCommandFile(commandPayload);
-    await this.clearResultFile();
-
-    await this.adb.shell(
-      `am broadcast -a ${COMPANION_PACKAGE}.LIST_CERTIFICATES ` +
-      `-n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
-    );
-
-    const result = await this.waitForResult<{ certificates: string[] }>('list');
-    return result?.certificates || [];
+    const payload = { action: 'list_certificates', timestamp: Date.now() };
+    const { raw } = await this.bridge.sendBroadcastAndWait('LIST_CERTIFICATES', payload);
+    if (!raw) return [];
+    const certs = raw.certificates;
+    return Array.isArray(certs) ? (certs as string[]) : [];
   }
+}
+
+/**
+ * Translate the companion app's wire format into our typed result.
+ *
+ * Companion emits `message` for diagnostics and may omit `ssid` / `eapMethod`
+ * when it failed before reaching the EAP layer (e.g. "Failed to read config
+ * file"). The host type expects `error` and always-populated identity fields,
+ * so we normalize at the boundary.
+ */
+function normalizeEnterpriseResult(
+  raw: Record<string, unknown>,
+  fallbackSsid: string,
+  fallbackEapMethod: EapMethod
+): EnterpriseConnectionResult {
+  const success = !!raw.success;
+  return {
+    success,
+    ssid: typeof raw.ssid === 'string' ? raw.ssid : fallbackSsid,
+    eapMethod: typeof raw.eapMethod === 'string' ? (raw.eapMethod as EapMethod) : fallbackEapMethod,
+    error: success ? undefined : pickErrorMessage(raw),
+  };
+}
+
+function normalizeCertificateResult(
+  raw: Record<string, unknown>,
+  fallbackAlias: string,
+  fallbackType: 'ca' | 'client'
+): CertificateInstallResult {
+  const success = !!raw.success;
+  return {
+    success,
+    alias: typeof raw.alias === 'string' ? raw.alias : fallbackAlias,
+    type: raw.type === 'ca' || raw.type === 'client' ? raw.type : fallbackType,
+    error: success ? undefined : pickErrorMessage(raw),
+  };
+}
+
+/** Prefer companion's `error` over `message`; fall back to a generic string. */
+function pickErrorMessage(raw: Record<string, unknown>): string {
+  if (typeof raw.error === 'string') return raw.error;
+  if (typeof raw.message === 'string') return raw.message;
+  return 'Unknown error';
 }
