@@ -1,0 +1,38 @@
+id: TC-SMK-012
+name: device_push_file / device_pull_file failure paths surface clean errors
+suite: smoke
+tags: [smoke, files]
+priority: 12
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Push a nonexistent local file — expect "cannot stat" error
+    command: npx tsx cicd/tests/src/mcp-client.ts device_push_file '{"localPath":"/tmp/wifi_mcp_nonexistent_{{TEST_RUN_ID}}.txt","remotePath":"/data/local/tmp/should_not_appear_{{TEST_RUN_ID}}.txt"}'
+    expectPatterns:
+      - "success.*false"
+      - "isError.*true"
+      - "cannot stat"
+      - "No such file"
+
+  - name: Pull a nonexistent remote file — expect "failed to stat remote object"
+    command: npx tsx cicd/tests/src/mcp-client.ts device_pull_file '{"remotePath":"/data/local/tmp/wifi_mcp_nonexistent_{{TEST_RUN_ID}}.txt","localPath":"/tmp/should_not_appear_{{TEST_RUN_ID}}.txt"}'
+    expectPatterns:
+      - "success.*false"
+      - "isError.*true"
+      - "failed to stat remote object"
+
+  - name: Pull from an app-private path — expect "Permission denied"
+    command: npx tsx cicd/tests/src/mcp-client.ts device_pull_file '{"remotePath":"/data/data/com.android.settings/databases/settings.db","localPath":"/tmp/should_not_appear_{{TEST_RUN_ID}}.txt"}'
+    expectPatterns:
+      - "success.*false"
+      - "isError.*true"
+      - "Permission denied"
+
+criteria: |
+  Verify the failure paths of device_push_file / device_pull_file produce
+  clean structured errors instead of throwing or hanging.
+  - Each failed call returns success: false with isError: true
+  - The diagnostic from adb appears in the response's error field
+  - Three orthogonal failure modes covered: missing host file, missing
+    device file, permission denied on a path the shell user can't read

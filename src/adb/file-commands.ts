@@ -1,5 +1,11 @@
 import { AdbClient } from './adb-client.js';
 
+// File transfers can run over slow USB links or against multi-MB payloads
+// (cert bundles, PCAPs, app-private DB dumps). adb-client.ts defaults to 30 s,
+// which is enough for the smoke fixture but cuts off real captures. 5 min is
+// generous without hiding genuinely-stuck transfers.
+const TRANSFER_TIMEOUT_MS = 5 * 60 * 1000;
+
 export interface FileTransferResult {
   success: boolean;
   localPath: string;
@@ -33,7 +39,7 @@ export class FileCommands {
   }
 
   async push(localPath: string, remotePath: string): Promise<FileTransferResult> {
-    const result = await this.adb.exec(['push', localPath, remotePath]);
+    const result = await this.adb.exec(['push', localPath, remotePath], TRANSFER_TIMEOUT_MS);
     if (!result.success) {
       return {
         success: false,
@@ -53,7 +59,7 @@ export class FileCommands {
   }
 
   async pull(remotePath: string, localPath: string): Promise<FileTransferResult> {
-    const result = await this.adb.exec(['pull', remotePath, localPath]);
+    const result = await this.adb.exec(['pull', remotePath, localPath], TRANSFER_TIMEOUT_MS);
     if (!result.success) {
       return {
         success: false,
