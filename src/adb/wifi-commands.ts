@@ -208,10 +208,16 @@ export class WifiCommands {
         throw new Error(`Could not find saved network for "${status.ssid}"`);
       }
     } else {
-      // Toggle WiFi off then on
+      // Re-enabling the radio doesn't always drive re-association on
+      // its own — the device can sit with state CONNECTED but
+      // ssid=<unknown ssid>, rssi=-127. Explicitly ask the framework
+      // to reconnect to the last saved network after the toggle so
+      // the caller doesn't have to tap the SSID in the device UI.
       await this.setEnabled(false);
       await new Promise(resolve => setTimeout(resolve, 1000));
       await this.setEnabled(true);
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await this.adb.shell('cmd wifi reconnect');
     }
   }
 
@@ -288,15 +294,17 @@ export class WifiCommands {
     // Parse connection info from dumpsys
     const dumpsys = dumpsysResult.stdout;
 
-    // Check if connected
-    if (dumpsys.includes('state: COMPLETED') || dumpsys.includes('CONNECTED')) {
-      status.connected = true;
-    }
+    const stateConnected = dumpsys.includes('state: COMPLETED') || dumpsys.includes('CONNECTED');
 
-    // Extract SSID
+    // Extract SSID. `<unknown ssid>` is the framework's placeholder when
+    // there's no real association (or location-permission gate); treat
+    // it the same as `<none>` and leave status.ssid undefined.
     const ssidMatch = dumpsys.match(/SSID:\s*["']?([^"',\n]+)["']?/i);
-    if (ssidMatch && ssidMatch[1] !== '<none>') {
-      status.ssid = ssidMatch[1].trim();
+    if (ssidMatch) {
+      const raw = ssidMatch[1].trim();
+      if (raw !== '<none>' && raw !== '<unknown ssid>') {
+        status.ssid = raw;
+      }
     }
 
     // Extract BSSID
@@ -328,6 +336,13 @@ export class WifiCommands {
     if (freqMatch) {
       status.frequency = parseInt(freqMatch[1], 10);
     }
+
+    // L2 association requires more than the radio reporting CONNECTED.
+    // Demand a real SSID and a non-sentinel RSSI so the unassociated
+    // post-toggle state (ssid=<unknown ssid>, rssi=-127) is reported
+    // honestly as connected:false.
+    const rssiValid = status.rssi !== undefined && status.rssi > -127;
+    status.connected = stateConnected && status.ssid !== undefined && rssiValid;
 
     return status;
   }
