@@ -156,10 +156,14 @@ export class WifiCommands {
     security: SecurityType,
     password?: string
   ): Promise<WifiConnectionResult> {
-    // Use escaped quotes to survive shell processing
-    let command = `cmd wifi connect-network '"${ssid}"' ${security}`;
+    // Single-quote for the device shell only. `cmd wifi connect-network`
+    // takes the bare SSID; the framework adds wpa_supplicant's on-disk
+    // quoting itself. Wrapping with literal `"..."` here would persist
+    // those characters as part of the SSID and break association.
+    const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+    let command = `cmd wifi connect-network ${sq(ssid)} ${security}`;
     if (password && security !== 'open') {
-      command += ` '"${password}"'`;
+      command += ` ${sq(password)}`;
     }
 
     const result = await this.adb.shell(command);
