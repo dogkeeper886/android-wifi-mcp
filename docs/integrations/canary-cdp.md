@@ -26,7 +26,7 @@ Register all three:
 
 ```bash
 # This project — adjust the path to your dist/
-claude mcp add --transport stdio android-wifi node /path/to/android-wifi-mcp/dist/index.js --stdio
+claude mcp add android-wifi -- node /path/to/android-wifi-mcp/dist/index.js --stdio
 
 # mobile-mcp for OS UI work
 claude mcp add mobile-next -- npx -y @mobilenext/mobile-mcp@latest
@@ -71,7 +71,7 @@ Captive portals typically present a self-signed cert on a private FQDN (or IP). 
 The practical bypass: **don't navigate into the portal — let Android open it for you**.
 
 1. After joining an open SSID (e.g. via this project's `wifi_connect`), Android's `CaptiveLoginActivity` automatically posts a *"Sign in to Wi-Fi network"* notification.
-2. Tap that notification (`mobile-next`'s `mobile_press_button` or `mobile_click_on_screen_at_coordinates` works). Chrome opens the portal in a new tab, with the cert exception pre-accepted.
+2. Open the notification shade and tap the notification. With `mobile-next`: `mobile_swipe_on_screen` down from the top to expand the shade, then `mobile_list_elements_on_screen` to locate the *"Sign in to Wi-Fi network"* row, then `mobile_click_on_screen_at_coordinates` on its bounds. Chrome opens the portal in a new tab, with the cert exception pre-accepted.
 3. From the host, list pages: `curl http://localhost:9222/json` — the new portal tab shows up with a `webSocketDebuggerUrl`.
 4. From `playwright-android`, use `browser_snapshot` / `browser_click` / etc. — they attach to the existing page rather than navigating into it.
 
