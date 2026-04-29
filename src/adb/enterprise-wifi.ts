@@ -1,6 +1,7 @@
 import { AdbClient } from './adb-client.js';
 import {
   EapConfig,
+  EapMethod,
   EnterpriseConnectionResult,
   CertificateInstallResult,
 } from '../types.js';
@@ -89,13 +90,28 @@ export class EnterpriseWifiCommands {
       };
     }
 
-    // Wait for result
-    const result = await this.waitForResult<EnterpriseConnectionResult>(config.ssid);
-    return result || {
-      success: false,
-      ssid: config.ssid,
-      eapMethod: config.eapMethod,
-      error: 'Timeout waiting for connection result',
+    // Wait for result. The companion app emits a wire format with `message`
+    // (and optional `ssid` / `eapMethod`); normalize into our typed result so
+    // `error` is always populated on failure.
+    const raw = await this.waitForResult<Record<string, unknown>>(config.ssid);
+    if (!raw) {
+      return {
+        success: false,
+        ssid: config.ssid,
+        eapMethod: config.eapMethod,
+        error: 'Timeout waiting for connection result',
+      };
+    }
+    const success = !!raw.success;
+    return {
+      success,
+      ssid: (typeof raw.ssid === 'string' ? raw.ssid : config.ssid),
+      eapMethod: (typeof raw.eapMethod === 'string' ? raw.eapMethod as EapMethod : config.eapMethod),
+      error: success
+        ? undefined
+        : (typeof raw.error === 'string' ? raw.error
+          : typeof raw.message === 'string' ? raw.message
+          : 'Unknown error'),
     };
   }
 
@@ -145,13 +161,26 @@ export class EnterpriseWifiCommands {
       };
     }
 
-    // Wait for result
-    const result = await this.waitForResult<CertificateInstallResult>(alias);
-    return result || {
-      success: false,
-      alias,
-      type,
-      error: 'Timeout waiting for certificate installation result',
+    // Wait for result. Normalize companion `message` → our typed `error`.
+    const raw = await this.waitForResult<Record<string, unknown>>(alias);
+    if (!raw) {
+      return {
+        success: false,
+        alias,
+        type,
+        error: 'Timeout waiting for certificate installation result',
+      };
+    }
+    const success = !!raw.success;
+    return {
+      success,
+      alias: (typeof raw.alias === 'string' ? raw.alias : alias),
+      type: (raw.type === 'ca' || raw.type === 'client' ? raw.type : type),
+      error: success
+        ? undefined
+        : (typeof raw.error === 'string' ? raw.error
+          : typeof raw.message === 'string' ? raw.message
+          : 'Unknown error'),
     };
   }
 
