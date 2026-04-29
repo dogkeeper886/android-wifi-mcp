@@ -161,7 +161,10 @@ function normalizeEnterpriseResult(
   return {
     success,
     ssid: typeof raw.ssid === 'string' ? raw.ssid : fallbackSsid,
-    eapMethod: typeof raw.eapMethod === 'string' ? (raw.eapMethod as EapMethod) : fallbackEapMethod,
+    eapMethod:
+      raw.eapMethod === 'peap' || raw.eapMethod === 'ttls' || raw.eapMethod === 'tls'
+        ? raw.eapMethod
+        : fallbackEapMethod,
     error: success ? undefined : pickErrorMessage(raw),
   };
 }
