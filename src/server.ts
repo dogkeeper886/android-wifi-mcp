@@ -741,112 +741,14 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
     }
   );
 
-  // ============ UI Automation Tools ============
-
-  mcpServer.tool(
-    'device_launch_app',
-    'Launch an Android app. Pass a package name (e.g. "com.android.chrome") to launch via the LAUNCHER intent, or an explicit "package/.Activity" component for precise launch.',
-    {
-      target: z
-        .string()
-        .describe('Package name (e.g. com.android.chrome) or component (e.g. com.android.chrome/com.google.android.apps.chrome.Main)'),
-    },
-    async ({ target }) => {
-      await ensureDevice();
-      const ui = deviceManager.getUICommands();
-      const result = await ui.launchApp(target);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    }
-  );
-
-  mcpServer.tool(
-    'device_open_url',
-    'Open a URL in the device default browser via VIEW intent',
-    {
-      url: z.string().describe('URL to open (e.g. https://example.com)'),
-    },
-    async ({ url }) => {
-      await ensureDevice();
-      const ui = deviceManager.getUICommands();
-      const result = await ui.openUrl(url);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    }
-  );
-
-  mcpServer.tool(
-    'device_tap',
-    'Tap at (x, y) screen coordinates',
-    {
-      x: z.number().describe('X coordinate in pixels'),
-      y: z.number().describe('Y coordinate in pixels'),
-    },
-    async ({ x, y }) => {
-      await ensureDevice();
-      const ui = deviceManager.getUICommands();
-      const result = await ui.tap(x, y);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    }
-  );
-
-  mcpServer.tool(
-    'device_swipe',
-    'Swipe from (x1, y1) to (x2, y2) over an optional duration in milliseconds',
-    {
-      x1: z.number().describe('Start X coordinate'),
-      y1: z.number().describe('Start Y coordinate'),
-      x2: z.number().describe('End X coordinate'),
-      y2: z.number().describe('End Y coordinate'),
-      durationMs: z.number().optional().default(300).describe('Swipe duration in milliseconds (default 300)'),
-    },
-    async ({ x1, y1, x2, y2, durationMs }) => {
-      await ensureDevice();
-      const ui = deviceManager.getUICommands();
-      const result = await ui.swipe(x1, y1, x2, y2, durationMs);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    }
-  );
-
-  mcpServer.tool(
-    'device_type_text',
-    'Type text into the currently focused field. Spaces are converted to %s; some special characters may not survive `input text` and should be sent via device_keyevent.',
-    {
-      text: z.string().describe('Text to type'),
-    },
-    async ({ text }) => {
-      await ensureDevice();
-      const ui = deviceManager.getUICommands();
-      const result = await ui.typeText(text);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    }
-  );
-
-  mcpServer.tool(
-    'device_keyevent',
-    'Send a keyevent. Accepts a numeric keycode or a name like KEYCODE_HOME, KEYCODE_BACK, KEYCODE_ENTER, KEYCODE_WAKEUP.',
-    {
-      keycode: z
-        .union([z.string(), z.number()])
-        .describe('Keycode name (e.g. KEYCODE_HOME) or numeric code (e.g. 3)'),
-    },
-    async ({ keycode }) => {
-      await ensureDevice();
-      const ui = deviceManager.getUICommands();
-      const result = await ui.keyevent(keycode);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
-    }
-  );
+  // ============ Device Screenshot ============
+  //
+  // Generic UI automation (taps, swipes, key events, type, app launch, URL
+  // open, ui dump, package list) was removed in #20's option-A trim. Compose
+  // with `mobile-next/mobile-mcp` for selector-based UI work, and with
+  // `playwright-android` (Chrome Canary CDP) for in-browser DOM. Screenshot
+  // stays here because it's a cheap verification primitive used internally by
+  // our WiFi/network/OTP flows.
 
   mcpServer.tool(
     'device_screenshot',
@@ -856,8 +758,8 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
     },
     async ({ outputPath }) => {
       await ensureDevice();
-      const ui = deviceManager.getUICommands();
-      const result = await ui.screenshot(outputPath);
+      const screenshot = deviceManager.getScreenshotCommands();
+      const result = await screenshot.screenshot(outputPath);
 
       if ('outputPath' in result) {
         return {
@@ -879,41 +781,6 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
             text: JSON.stringify({ success: true, mimeType: result.mimeType, bytes: result.bytes }, null, 2),
           },
         ],
-      };
-    }
-  );
-
-  mcpServer.tool(
-    'device_ui_dump',
-    'Dump the current UI hierarchy as XML (uiautomator dump)',
-    {},
-    async () => {
-      await ensureDevice();
-      const ui = deviceManager.getUICommands();
-      const result = await ui.uiDump();
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({ success: result.success, bytes: result.bytes, xml: result.xml }, null, 2),
-          },
-        ],
-      };
-    }
-  );
-
-  mcpServer.tool(
-    'device_list_packages',
-    'List installed app package names. Optional substring filter narrows the list.',
-    {
-      filter: z.string().optional().describe('Substring to filter package names (passed to pm list packages)'),
-    },
-    async ({ filter }) => {
-      await ensureDevice();
-      const ui = deviceManager.getUICommands();
-      const result = await ui.listPackages(filter);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     }
   );

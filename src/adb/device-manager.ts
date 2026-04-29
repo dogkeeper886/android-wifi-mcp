@@ -1,6 +1,6 @@
 import { AdbClient } from './adb-client.js';
 import { WifiCommands } from './wifi-commands.js';
-import { UICommands } from './ui-commands.js';
+import { ScreenshotCommands } from './screenshot-commands.js';
 import { SmsCommands } from './sms-commands.js';
 import { NotificationCommands } from './notifications-commands.js';
 import { SettingsCommands } from './settings-commands.js';
@@ -14,7 +14,7 @@ import { Device, DeviceInfo } from '../types.js';
 export class DeviceManager {
   private adb: AdbClient;
   private wifi: WifiCommands;
-  private ui: UICommands;
+  private screenshot: ScreenshotCommands;
   private sms: SmsCommands;
   private notifications: NotificationCommands;
   private settings: SettingsCommands;
@@ -24,7 +24,7 @@ export class DeviceManager {
   constructor(adbPath?: string) {
     this.adb = new AdbClient(adbPath);
     this.wifi = new WifiCommands(this.adb);
-    this.ui = new UICommands(this.adb);
+    this.screenshot = new ScreenshotCommands(this.adb);
     this.sms = new SmsCommands(this.adb);
     this.notifications = new NotificationCommands(this.adb);
     this.settings = new SettingsCommands(this.adb);
@@ -46,10 +46,10 @@ export class DeviceManager {
   }
 
   /**
-   * Get the UI commands instance
+   * Get the screenshot commands instance
    */
-  getUICommands(): UICommands {
-    return this.ui;
+  getScreenshotCommands(): ScreenshotCommands {
+    return this.screenshot;
   }
 
   /**

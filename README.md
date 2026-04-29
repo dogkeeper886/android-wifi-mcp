@@ -12,6 +12,21 @@ This server enables Claude and other MCP clients to remotely control WiFi connec
 - **Multi-Device**: Manage multiple connected Android devices
 - **Network Diagnostics**: Ping, DNS lookup, internet connectivity, captive portal detection
 - **Device Info**: Query device model, Android version, and compatibility
+- **Settings & file staging**: Read/write `system`/`secure`/`global` settings, push/pull files to/from the device
+
+## When to use this MCP vs alternatives
+
+This server owns the **ADB-level control plane for QA flows**: WiFi, network probing, OTP capture, device-settings I/O, file staging. It deliberately does **not** ship generic Android UI automation or browser DOM tooling — those are better served by upstream projects you can run alongside.
+
+| Goal | Use |
+|---|---|
+| Connect to WiFi (PSK / 802.1X), capture OTPs from SMS or notifications, probe captive portals, read/write Android settings, push or pull files | **`android-wifi-mcp`** (this project) |
+| Drive system Settings UI, app screens, or any selector-based UI automation | **[`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp)** — semantic accessibility-tree access (`mobile_list_elements_on_screen`), tap by computed coordinates |
+| Drive a captive-portal page, web admin UI, or anything DOM-level on the device | **[`playwright-android`](https://github.com/microsoft/playwright)** via Chrome Canary CDP — see `docs/integrations/` |
+
+These three compose cleanly: register all three with Claude Code, and the assistant orchestrates whichever fits each step. The proxy in this server (#14) bundles `@playwright/mcp` for host-side browser DOM in the same tools/list, but mobile-mcp stays a separate registration.
+
+For the gotcha on `adb shell uiautomator dump` (null-root retry loop) — see `docs/integrations/uiautomator-retry.md`. We don't ship a UI-dump tool; this is reference material for anyone calling uiautomator directly.
 
 ## Requirements
 
@@ -181,7 +196,7 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 
 ## Available Tools
 
-**36 native tools** in 9 categories below. With the optional `@playwright/mcp` upstream enabled (see [Proxying upstream MCPs](#proxying-upstream-mcps)), an additional **21 `browser_*` tools** are surfaced through the same endpoint for **57 total**.
+**28 native tools** in 8 categories below. With the optional `@playwright/mcp` upstream enabled (see [Proxying upstream MCPs](#proxying-upstream-mcps)), an additional **21 `browser_*` tools** are surfaced through the same endpoint for **49 total**.
 
 ### Device Management
 
@@ -190,6 +205,7 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 | `device_list` | List all connected Android devices |
 | `device_select` | Select a device for operations |
 | `device_info` | Get detailed device information |
+| `device_screenshot` | Capture a PNG (returns base64 or saves to a host path) |
 
 ### Device Settings (system / secure / global)
 
@@ -235,22 +251,6 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 | `network_check_internet` | Check internet connectivity |
 | `network_check_captive` | Check for captive portal |
 | `network_interface_info` | Get IP, gateway, DNS info |
-
-### UI Automation
-
-OS-level primitives (pixel/UI-tree, not DOM). For DOM-level browser automation, enable the `@playwright/mcp` upstream proxy described in [Proxying upstream MCPs](#proxying-upstream-mcps) — those `browser_*` tools complement these for web-page targets.
-
-| Tool | Description |
-|------|-------------|
-| `device_launch_app` | Launch an app by package or `pkg/.Activity` component |
-| `device_open_url` | Open a URL in the default browser via VIEW intent |
-| `device_tap` | Tap at (x, y) screen coordinates |
-| `device_swipe` | Swipe between two coordinates with optional duration |
-| `device_type_text` | Type text into the focused field |
-| `device_keyevent` | Send a keyevent (e.g. `KEYCODE_HOME`, `KEYCODE_BACK`) |
-| `device_screenshot` | Capture a PNG (returns base64 or saves to a host path) |
-| `device_ui_dump` | Dump the on-screen UI hierarchy as XML |
-| `device_list_packages` | List installed app package names |
 
 ### SMS / OTP
 
@@ -324,21 +324,21 @@ This will use `wifi_connect_enterprise` with:
 > Check if my phone has internet access and detect any captive portal
 ```
 
-### Launch an App and Take a Screenshot
+### Read or change an Android setting
 
 ```
-> Launch the Settings app on my phone, take a screenshot to /tmp/settings.png, then return to home
+> Read airplane_mode_on, then set private_dns_mode to "off"
 ```
 
-This chains `device_launch_app` (target: `com.android.settings`), `device_screenshot` (outputPath: `/tmp/settings.png`), and `device_keyevent` (keycode: `KEYCODE_HOME`).
+Uses `device_settings_get` (namespace `global`, key `airplane_mode_on`) and `device_settings_put` (namespace `global`, key `private_dns_mode`, value `"off"`). For UI-driven Settings flows (the toggle screens, not the underlying provider), compose with `mobile-next/mobile-mcp`.
 
-### Open a URL and Inspect the Page
+### Push a cert to the device, then install it
 
 ```
-> Open https://example.com on my phone and dump the on-screen UI hierarchy
+> Push /tmp/corp_ca.pem to /data/local/tmp/ca.pem, then install it as the CA cert "CorpCA"
 ```
 
-Uses `device_open_url` then `device_ui_dump` for OS-level inspection. For DOM-level browser automation see #10.
+Chains `device_push_file` and `wifi_install_certificate`. The push goes through `adb push`; the install routes through the companion app's bridge.
 
 ### Wait for a Login OTP via SMS
 
@@ -443,7 +443,7 @@ Upstreams start eagerly at server boot. On `SIGINT` / `SIGTERM` the server close
 
 ### Verified composition
 
-The default `UPSTREAM_MCP` in `.env.example` is `@playwright/mcp` — running our server with that set yields **57 total tools** (36 native + 21 from `@playwright/mcp`), all reachable from one MCP endpoint. See `cicd/tests/testcases/proxy/TC-PROXY-002.yml` for the end-to-end smoke test.
+The default `UPSTREAM_MCP` in `.env.example` is `@playwright/mcp` — running our server with that set yields **49 total tools** (28 native + 21 from `@playwright/mcp`), all reachable from one MCP endpoint. See `cicd/tests/testcases/proxy/TC-PROXY-002.yml` for the end-to-end smoke test.
 
 ## Testing
 
@@ -518,7 +518,9 @@ android-wifi-mcp/
 │   │   ├── adb-client.ts       # ADB command wrapper
 │   │   ├── device-manager.ts   # Multi-device handling
 │   │   ├── wifi-commands.ts    # cmd wifi wrapper
-│   │   ├── ui-commands.ts      # input / am start / screencap / uiautomator
+│   │   ├── screenshot-commands.ts # screencap wrapper
+│   │   ├── settings-commands.ts   # adb shell settings get/put
+│   │   ├── file-commands.ts       # adb push / adb pull
 │   │   ├── sms-commands.ts     # SMS read / OTP polling via content provider
 │   │   ├── notifications-commands.ts # Notification capture via companion app
 │   │   └── enterprise-wifi.ts  # 802.1X enterprise WiFi
@@ -527,6 +529,8 @@ android-wifi-mcp/
 ├── companion-app/              # Android companion app for 802.1X
 │   ├── app/src/main/kotlin/    # Kotlin source files
 │   └── build.gradle.kts        # Gradle build config
+├── docs/
+│   └── integrations/           # Notes on composing with mobile-mcp / playwright-android
 ├── cicd/
 │   ├── tests/                  # YAML-driven test framework (see Testing)
 │   │   ├── src/
@@ -536,10 +540,10 @@ android-wifi-mcp/
 │   │   │   ├── mcp-client.ts   # stdio MCP client
 │   │   │   ├── loader.ts, judge/, reporter/, types.ts, config.ts
 │   │   │   └── ...
-│   │   ├── testcases/<suite>/  # smoke, ui, sms, notifications, proxy (wifi/enterprise/portal pending)
+│   │   ├── testcases/<suite>/  # smoke, sms, notifications, proxy (wifi/enterprise/portal pending)
 │   │   └── fixtures/           # mock-mcp-upstream.mjs (used by TC-PROXY-001)
 │   └── results/                # JSON per-run results
-├── .github/workflows/          # build.yml, test-run.yml, test-{smoke,ui,sms,notifications,proxy}.yml, ci.yml
+├── .github/workflows/          # build.yml, test-run.yml, test-{smoke,sms,notifications,proxy}.yml, ci.yml
 ├── .claude/skills/             # ci-testcase, ci-run
 ├── .env.example
 ├── package.json
