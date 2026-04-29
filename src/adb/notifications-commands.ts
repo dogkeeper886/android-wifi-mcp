@@ -1,14 +1,9 @@
 import { AdbClient } from './adb-client.js';
-
-const COMPANION_PACKAGE = 'com.example.wifimcpcompanion';
-// IPC files live in the companion app's private filesDir, accessed via run-as.
-const COMMAND_FILE_REL = 'files/wifi_mcp_command.json';
-const RESULT_FILE_REL = 'files/wifi_mcp_result.json';
-const RESULT_TIMEOUT = 10000; // 10s for a single broadcast round-trip
+import { CompanionAppBridge } from './companion-bridge.js';
 
 /**
- * Talks to the companion app's NotificationCaptureService over the same
- * file-IPC bridge the enterprise-wifi flow uses.
+ * Talks to the companion app's NotificationCaptureService over the file-IPC
+ * bridge (see {@link CompanionAppBridge}).
  *
  * The service captures every notification posted system-wide (WhatsApp,
  * email, banking apps, etc.) so we can extract OTPs that don't come via
@@ -16,19 +11,16 @@ const RESULT_TIMEOUT = 10000; // 10s for a single broadcast round-trip
  * Settings → Notifications → Notification access.
  */
 export class NotificationCommands {
-  private adb: AdbClient;
+  private bridge: CompanionAppBridge;
 
   constructor(adb: AdbClient) {
-    this.adb = adb;
+    // 10 s + 300 ms poll — single round-trip; no retries from the caller.
+    this.bridge = new CompanionAppBridge(adb, { resultTimeoutMs: 10_000, pollIntervalMs: 300 });
   }
 
   async getStatus(): Promise<NotificationStatus> {
-    await this.clearResultFile();
-    await this.adb.shell(
-      `am broadcast -a ${COMPANION_PACKAGE}.NOTIFICATION_STATUS -n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
-    );
-    const result = await this.waitForResult();
-    if (!result) {
+    const { raw } = await this.bridge.sendBroadcastAndWait('NOTIFICATION_STATUS');
+    if (!raw) {
       return {
         listenerConnected: false,
         capturedCount: 0,
@@ -37,12 +29,12 @@ export class NotificationCommands {
       };
     }
     return {
-      listenerConnected: !!result.listenerConnected,
-      capturedCount: typeof result.capturedCount === 'number' ? result.capturedCount : 0,
-      warning: result.success
+      listenerConnected: !!raw.listenerConnected,
+      capturedCount: typeof raw.capturedCount === 'number' ? raw.capturedCount : 0,
+      warning: raw.success
         ? undefined
-        : typeof result.message === 'string'
-        ? result.message
+        : typeof raw.message === 'string'
+        ? raw.message
         : 'Unknown error',
     };
   }
@@ -58,12 +50,7 @@ export class NotificationCommands {
     if (opts.limit !== undefined) {
       config.limit = opts.limit;
     }
-    await this.writeCommandFile(config);
-    await this.clearResultFile();
-    await this.adb.shell(
-      `am broadcast -a ${COMPANION_PACKAGE}.LIST_NOTIFICATIONS -n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
-    );
-    const result = await this.waitForResult();
+    const { raw: result } = await this.bridge.sendBroadcastAndWait('LIST_NOTIFICATIONS', config);
     if (!result) {
       return {
         notifications: [],
@@ -135,38 +122,6 @@ export class NotificationCommands {
     return { found: false, waitedMs: Date.now() - start, warning: lastWarning };
   }
 
-  private async writeCommandFile(payload: object): Promise<void> {
-    const json = JSON.stringify(payload);
-    const b64 = Buffer.from(json, 'utf-8').toString('base64');
-    await this.adb.shell(
-      `run-as ${COMPANION_PACKAGE} sh -c 'echo ${b64} | base64 -d > ${COMMAND_FILE_REL}'`
-    );
-  }
-
-  private async clearResultFile(): Promise<void> {
-    await this.adb.shell(`run-as ${COMPANION_PACKAGE} rm -f ${RESULT_FILE_REL}`);
-  }
-
-  private async waitForResult(): Promise<Record<string, unknown> | null> {
-    const start = Date.now();
-    const pollInterval = 300;
-    while (Date.now() - start < RESULT_TIMEOUT) {
-      await new Promise((res) => setTimeout(res, pollInterval));
-      const cat = await this.adb.shell(
-        `run-as ${COMPANION_PACKAGE} cat ${RESULT_FILE_REL} 2>/dev/null`
-      );
-      if (cat.success && cat.stdout.trim()) {
-        try {
-          const parsed = JSON.parse(cat.stdout) as Record<string, unknown>;
-          await this.clearResultFile();
-          return parsed;
-        } catch {
-          // partial write — keep polling
-        }
-      }
-    }
-    return null;
-  }
 }
 
 export interface NotificationStatus {
