@@ -67,9 +67,6 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
-
-    // Clear stale result BEFORE broadcasting; the receiver runs synchronously
-    // and a post-broadcast rm would delete the live result.
     await this.adb.shell(`rm -f ${RESULT_FILE}`);
 
     // Send broadcast to companion app
@@ -127,9 +124,6 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
-
-    // Clear stale result BEFORE broadcasting; the receiver runs synchronously
-    // and a post-broadcast rm would delete the live result.
     await this.adb.shell(`rm -f ${RESULT_FILE}`);
 
     // Send broadcast to companion app
@@ -169,7 +163,12 @@ export class EnterpriseWifiCommands {
   }
 
   /**
-   * Wait for result from companion app
+   * Poll for the result file the companion app writes after handling a broadcast.
+   *
+   * Caller must `rm -f ${RESULT_FILE}` between writing the command file and
+   * sending the broadcast. The receiver runs synchronously (~50 ms) so a
+   * post-broadcast cleanup would race the app's write and produce spurious
+   * timeouts.
    */
   private async waitForResult<T>(identifier: string): Promise<T | null> {
     const startTime = Date.now();
@@ -210,9 +209,6 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
-
-    // Clear stale result BEFORE broadcasting; the receiver runs synchronously
-    // and a post-broadcast rm would delete the live result.
     await this.adb.shell(`rm -f ${RESULT_FILE}`);
 
     await this.adb.shell(
