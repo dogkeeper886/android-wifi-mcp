@@ -111,6 +111,64 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
     }
   );
 
+  // ============ Device Settings (system / secure / global) ============
+
+  mcpServer.tool(
+    'device_settings_get',
+    'Read a value from the Android settings provider via `adb shell settings get`. Namespaces: system (user prefs), secure (auth/lockscreen/IME), global (airplane_mode_on, mobile_data, private_dns_*, captive_portal_server, etc).',
+    {
+      namespace: z.enum(['system', 'secure', 'global']).describe('Settings namespace'),
+      key: z.string().describe('Setting key, e.g. "airplane_mode_on" or "default_input_method"'),
+    },
+    async ({ namespace, key }) => {
+      await ensureDevice();
+      const settings = deviceManager.getSettingsCommands();
+      const result = await settings.get(namespace, key);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    }
+  );
+
+  mcpServer.tool(
+    'device_settings_put',
+    'Write a value to the Android settings provider via `adb shell settings put`. Requires WRITE_SECURE_SETTINGS, which the ADB shell user holds by default on dev/userdebug builds.',
+    {
+      namespace: z.enum(['system', 'secure', 'global']).describe('Settings namespace'),
+      key: z.string().describe('Setting key'),
+      value: z.string().describe('New value (always written as a string; the settings provider preserves it as text)'),
+    },
+    async ({ namespace, key, value }) => {
+      await ensureDevice();
+      const settings = deviceManager.getSettingsCommands();
+      const result = await settings.put(namespace, key, value);
+      if (result.success) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+        isError: true,
+      };
+    }
+  );
+
   // ============ WiFi Tools ============
 
   mcpServer.tool(

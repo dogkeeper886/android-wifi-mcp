@@ -1,0 +1,30 @@
+id: TC-SMK-009
+name: device_settings_put round-trips a value through the system namespace
+suite: smoke
+tags: [smoke, settings]
+priority: 9
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Write a sentinel value into a non-load-bearing system setting
+    command: npx tsx cicd/tests/src/mcp-client.ts device_settings_put '{"namespace":"system","key":"wifi_mcp_smoke_{{TEST_RUN_ID}}","value":"hello"}'
+    expectPatterns:
+      - "success.*true"
+      - "wifi_mcp_smoke_{{TEST_RUN_ID}}"
+    rejectPatterns:
+      - "isError"
+
+  - name: Read the sentinel back
+    command: npx tsx cicd/tests/src/mcp-client.ts device_settings_get '{"namespace":"system","key":"wifi_mcp_smoke_{{TEST_RUN_ID}}"}'
+    expectPatterns:
+      - "value.*hello"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  Verify a put-then-get round-trip on a TEST_RUN_ID-namespaced sentinel key.
+  - Put returns success
+  - Get returns the same value we wrote
+  - Sentinel key is namespaced by TEST_RUN_ID so concurrent runs don't collide
+  - Stays in the `system` namespace (cheapest, no security implications)
