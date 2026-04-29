@@ -1,8 +1,8 @@
 # Driving the device's browser via Chrome DevTools Protocol (Canary CDP)
 
-This is the recipe for using `playwright-android` to talk to **the phone's** Chrome browser at the DOM level — captive-portal pages, web admin UIs, anything that needs real selectors instead of pixel coordinates.
+This is the recipe for using `@playwright/mcp` to talk to **the phone's** Chrome browser at the DOM level — captive-portal pages, web admin UIs, anything that needs real selectors instead of pixel coordinates.
 
-The setup is **doc-only**; this MCP server doesn't ship a wrapper for it. Once the bridge is up, register `playwright-android` (or any CDP client) alongside `android-wifi-mcp` and the assistant can use both.
+The setup is **doc-only**; this MCP server doesn't ship a wrapper for it. Once the bridge is up, register `@playwright/mcp` (pointed at the bridge) alongside `android-wifi-mcp` and `mobile-next/mobile-mcp`, and the assistant orchestrates the three.
 
 ## Why Chrome Canary, not stable Chrome
 
@@ -10,13 +10,40 @@ On most Samsung and many other OEM devices, **stable Chrome's DevTools socket is
 
 Same applies to Chromium beta and dev channels — Canary is the most widely available channel that ships unmodified, so it's the safest default.
 
+## Register the three MCP servers with Claude Code
+
+The phone-side QA story uses three cooperating MCP servers, each owning a different layer:
+
+| Server | What it owns | How it's invoked |
+|---|---|---|
+| **`android-wifi`** (this project) | WiFi join, network probing, OTP capture, settings, file staging | local `node dist/index.js --stdio` |
+| **`mobile-next`** ([mobile-mcp](https://github.com/mobile-next/mobile-mcp)) | OS UI driving (Settings, system dialogs, third-party apps) via the accessibility tree | `npx -y @mobilenext/mobile-mcp@latest` |
+| **`playwright-android`** | Browser DOM on the **device** (captive portals, web admin UIs) — this is `@playwright/mcp` pointed at the CDP bridge below | `npx -y @playwright/mcp@latest --cdp-endpoint http://localhost:9222` |
+
+> Note: `playwright-android` **is not a separate package** — it's the standard `@playwright/mcp` started with `--cdp-endpoint http://localhost:9222`, which makes it attach to whatever Chrome instance the bridge is forwarding (Canary on the device, here). If you also use `@playwright/mcp` for host-side Chromium, register it twice with different names.
+
+Register all three:
+
+```bash
+# This project — adjust the path to your dist/
+claude mcp add --transport stdio android-wifi node /path/to/android-wifi-mcp/dist/index.js --stdio
+
+# mobile-mcp for OS UI work
+claude mcp add mobile-next -- npx -y @mobilenext/mobile-mcp@latest
+
+# playwright-mcp pointed at the CDP bridge (set up in the next sections)
+claude mcp add playwright-android -- npx -y @playwright/mcp@latest --cdp-endpoint http://localhost:9222
+```
+
+`claude mcp list` confirms all three are connected. `playwright-android` will report `Connected` even before the bridge is up — it lazy-connects to the CDP endpoint when a `browser_*` tool is called, so don't be misled by its startup status.
+
 ## One-time device setup
 
 1. Install **Chrome Canary** from Play Store: `com.chrome.canary`.
 2. Open Canary at least once and dismiss the welcome screens. The DevTools socket is exposed automatically once the app has run; no developer-options toggle required.
 3. USB debugging stays enabled as for any other ADB-driven workflow.
 
-That's it — nothing persistent on the host side.
+That's it — nothing persistent on the host side beyond the MCP registrations above.
 
 ## Per-session bridge
 
@@ -43,36 +70,28 @@ Captive portals typically present a self-signed cert on a private FQDN (or IP). 
 
 The practical bypass: **don't navigate into the portal — let Android open it for you**.
 
-1. After joining an open SSID, Android's `CaptiveLoginActivity` automatically posts a *"Sign in to Wi-Fi network"* notification.
-2. Tap that notification (or send `mobile_press_button` "BACK"-then-tap via mobile-mcp). Chrome opens the portal in a new tab, with the cert exception pre-accepted.
+1. After joining an open SSID (e.g. via this project's `wifi_connect`), Android's `CaptiveLoginActivity` automatically posts a *"Sign in to Wi-Fi network"* notification.
+2. Tap that notification (`mobile-next`'s `mobile_press_button` or `mobile_click_on_screen_at_coordinates` works). Chrome opens the portal in a new tab, with the cert exception pre-accepted.
 3. From the host, list pages: `curl http://localhost:9222/json` — the new portal tab shows up with a `webSocketDebuggerUrl`.
-4. Attach `playwright-android` to that existing page rather than navigating into it.
+4. From `playwright-android`, use `browser_snapshot` / `browser_click` / etc. — they attach to the existing page rather than navigating into it.
 
 This sidesteps the strict-cert path entirely. The trade-off is that you depend on Android's captive-portal detection firing — which it normally does within a few seconds of joining the SSID.
 
-## Attaching playwright-android
+## End-to-end orchestration example
 
-With the bridge up and pages listed, point a CDP client at `http://localhost:9222`:
+With all three MCPs registered and the bridge up, a captive-portal verification flow looks like:
 
-```js
-// playwright (host-Chromium) connects to a remote CDP endpoint
-import { chromium } from 'playwright';
+| Step | MCP | Tool |
+|---|---|---|
+| 1. Join the open SSID | `android-wifi` | `wifi_connect` (security: `open`) |
+| 2. Confirm the captive portal | `android-wifi` | `network_check_captive` |
+| 3. Tap the captive-portal notification | `mobile-next` | `mobile_list_elements_on_screen` → `mobile_click_on_screen_at_coordinates` |
+| 4. Drive the portal page (e.g. "Connect with WhatsApp") | `playwright-android` | `browser_snapshot` → `browser_click` |
+| 5. Wait for OTP | `android-wifi` | `notifications_wait_for_otp` |
+| 6. Enter OTP back into the portal | `playwright-android` | `browser_type` |
+| 7. Verify connectivity | `android-wifi` | `network_check_internet` |
 
-const browser = await chromium.connectOverCDP('http://localhost:9222');
-const contexts = browser.contexts();
-const page = contexts[0].pages()[0];   // or pick by url
-
-await page.click('button:has-text("Connect with WhatsApp")');
-```
-
-For MCP composition, register `playwright-android` (the MCP wrapper for the same protocol) alongside this server:
-
-```bash
-claude mcp add --transport stdio android-wifi node /path/to/dist/index.js --stdio
-claude mcp add --transport stdio playwright-android <playwright-android-server-cmd>
-```
-
-Claude then orchestrates: `wifi_connect` (this server) → notification arrives → tap into portal → `browser_*` tools (playwright-android) interact with the DOM → `network_check_internet` (this server) verifies the connection.
+Claude orchestrates the seven steps. No code on your side beyond registering the three servers and running `adb forward` once per session.
 
 ## Troubleshooting
 
@@ -80,7 +99,7 @@ Claude then orchestrates: `wifi_connect` (this server) → notification arrives 
 |---|---|---|
 | `curl http://localhost:9222/json/version` returns nothing | Canary not running, or wrong app | Foreground Canary on the device; verify it's `com.chrome.canary` not stable Chrome (`com.android.chrome`) |
 | `adb forward` succeeds but the curl hangs | Stable Chrome was forwarded by accident | The socket name `localabstract:chrome_devtools_remote` is shared — only one Chrome variant should be in foreground. Force-stop the others |
-| `connectOverCDP` succeeds but `pages()` is empty | No tabs open | Open at least one tab in Canary, even `chrome://newtab` |
+| `playwright-android` reports `Connected` in `claude mcp list` but `browser_snapshot` fails | Bridge or Canary not up at call time | The MCP server is connected; the CDP endpoint isn't. Run the `adb forward` command and foreground Canary, then retry the tool call |
 | Captive-portal page is blank when attached | Navigated into a strict-cert URL | Don't navigate — attach to the page Android opened via the captive-portal notification |
 
 ## What this MCP server does and does not do here
