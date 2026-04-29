@@ -18,9 +18,9 @@ Claude Code  ──MCP──►  android-wifi-mcp (this server)  ──ADB──
 ```
 
 - **Server entrypoint:** `src/index.ts` picks transport (HTTP default, `--stdio` for stdio).
-- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 34 native tools.
+- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 36 native tools.
 - **Proxy:** `src/mcp/upstream-proxy.ts` spawns upstream MCP subprocesses on startup and merges their tools into one tools/list. Configured via `UPSTREAM_MCP` env var.
-- **ADB layer:** `src/adb/` — `adb-client.ts` (process wrapper), `device-manager.ts` (multi-device), then per-domain wrappers: `wifi-commands.ts`, `ui-commands.ts`, `sms-commands.ts`, `enterprise-wifi.ts`, `settings-commands.ts`.
+- **ADB layer:** `src/adb/` — `adb-client.ts` (process wrapper), `device-manager.ts` (multi-device), then per-domain wrappers: `wifi-commands.ts`, `ui-commands.ts`, `sms-commands.ts`, `enterprise-wifi.ts`, `settings-commands.ts`, `file-commands.ts`.
 - **Companion app:** `companion-app/` — Kotlin Android app that handles 802.1X enterprise WiFi (the only flow that needs an on-device daemon today).
 - **Network helpers:** `src/network/network-check.ts`.
 - **Test framework:** `cicd/tests/` — custom YAML-driven runner. See "Tests" below.
@@ -57,7 +57,7 @@ To add a test, use the **`ci-testcase`** project skill (`.claude/skills/ci-testc
 
 ## Tool surface
 
-34 native tools across 7 categories (`device_*` mgmt, `device_settings_*`, `wifi_*`, `wifi_*_enterprise`, `network_*`, `device_*` UI, `sms_*`). With `UPSTREAM_MCP=playwright=...` set, an additional 21 `browser_*` tools from `@playwright/mcp` are proxied through — **55 total**.
+36 native tools across 8 categories (`device_*` mgmt, `device_settings_*`, `device_*_file`, `wifi_*`, `wifi_*_enterprise`, `network_*`, `device_*` UI, `sms_*`). With `UPSTREAM_MCP=playwright=...` set, an additional 21 `browser_*` tools from `@playwright/mcp` are proxied through — **57 total**.
 
 The unified namespace is the design goal: Claude Code sees one server, gets one tools/list. Don't add a feature here that exists in a mature upstream — proxy it instead. (#10 was closed and #14 implemented for exactly this reason.)
 

@@ -4,11 +4,12 @@ import { UICommands } from './ui-commands.js';
 import { SmsCommands } from './sms-commands.js';
 import { NotificationCommands } from './notifications-commands.js';
 import { SettingsCommands } from './settings-commands.js';
+import { FileCommands } from './file-commands.js';
 import { Device, DeviceInfo } from '../types.js';
 
 /**
  * Manages connected Android devices and provides unified access
- * to ADB, WiFi, UI, SMS, notification, and settings commands.
+ * to ADB, WiFi, UI, SMS, notification, settings, and file commands.
  */
 export class DeviceManager {
   private adb: AdbClient;
@@ -17,6 +18,7 @@ export class DeviceManager {
   private sms: SmsCommands;
   private notifications: NotificationCommands;
   private settings: SettingsCommands;
+  private files: FileCommands;
   private devices: Map<string, DeviceInfo> = new Map();
 
   constructor(adbPath?: string) {
@@ -26,6 +28,7 @@ export class DeviceManager {
     this.sms = new SmsCommands(this.adb);
     this.notifications = new NotificationCommands(this.adb);
     this.settings = new SettingsCommands(this.adb);
+    this.files = new FileCommands(this.adb);
   }
 
   /**
@@ -68,6 +71,13 @@ export class DeviceManager {
    */
   getSettingsCommands(): SettingsCommands {
     return this.settings;
+  }
+
+  /**
+   * Get the file transfer commands instance
+   */
+  getFileCommands(): FileCommands {
+    return this.files;
   }
 
   /**

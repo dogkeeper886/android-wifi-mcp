@@ -169,6 +169,54 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
     }
   );
 
+  // ============ Device File Transfer ============
+
+  mcpServer.tool(
+    'device_push_file',
+    'Push a file from the host to the device via `adb push`. Useful for staging certs, profiles, PCAPs. Targets like `/data/local/tmp/` work; `/data/data/<pkg>/` requires `run-as` (use the companion-app bridge instead).',
+    {
+      localPath: z.string().describe('Absolute path on the host machine'),
+      remotePath: z.string().describe('Destination path on the device'),
+    },
+    async ({ localPath, remotePath }) => {
+      await ensureDevice();
+      const files = deviceManager.getFileCommands();
+      const result = await files.push(localPath, remotePath);
+      if (result.success) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        isError: true,
+      };
+    }
+  );
+
+  mcpServer.tool(
+    'device_pull_file',
+    'Pull a file from the device to the host via `adb pull`. Useful for capturing downloaded files, app-private dumps for assertions, log files. Source must be readable by the adb shell user.',
+    {
+      remotePath: z.string().describe('Source path on the device'),
+      localPath: z.string().describe('Absolute destination path on the host machine'),
+    },
+    async ({ remotePath, localPath }) => {
+      await ensureDevice();
+      const files = deviceManager.getFileCommands();
+      const result = await files.pull(remotePath, localPath);
+      if (result.success) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        };
+      }
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+        isError: true,
+      };
+    }
+  );
+
   // ============ WiFi Tools ============
 
   mcpServer.tool(
