@@ -67,6 +67,7 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
+    await this.adb.shell(`rm -f ${RESULT_FILE}`);
 
     // Send broadcast to companion app
     const broadcastResult = await this.adb.shell(
@@ -123,6 +124,7 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
+    await this.adb.shell(`rm -f ${RESULT_FILE}`);
 
     // Send broadcast to companion app
     const broadcastResult = await this.adb.shell(
@@ -161,14 +163,16 @@ export class EnterpriseWifiCommands {
   }
 
   /**
-   * Wait for result from companion app
+   * Poll for the result file the companion app writes after handling a broadcast.
+   *
+   * Caller must `rm -f ${RESULT_FILE}` between writing the command file and
+   * sending the broadcast. The receiver runs synchronously (~50 ms) so a
+   * post-broadcast cleanup would race the app's write and produce spurious
+   * timeouts.
    */
   private async waitForResult<T>(identifier: string): Promise<T | null> {
     const startTime = Date.now();
     const pollInterval = 500; // 500ms
-
-    // Clear any existing result file
-    await this.adb.shell(`rm -f ${RESULT_FILE}`);
 
     while (Date.now() - startTime < RESULT_TIMEOUT) {
       await new Promise(resolve => setTimeout(resolve, pollInterval));
@@ -205,6 +209,7 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
+    await this.adb.shell(`rm -f ${RESULT_FILE}`);
 
     await this.adb.shell(
       `am broadcast -a ${COMPANION_PACKAGE}.LIST_CERTIFICATES ` +
