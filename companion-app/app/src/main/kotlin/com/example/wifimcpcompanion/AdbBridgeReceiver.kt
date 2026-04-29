@@ -3,14 +3,18 @@ package com.example.wifimcpcompanion
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Environment
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
 /**
- * Receives broadcast intents from ADB and processes enterprise WiFi commands
+ * Receives broadcast intents from ADB and processes enterprise WiFi commands.
+ *
+ * IPC files live in the app's private filesDir (`/data/data/<pkg>/files/`)
+ * and are accessed from the host via `adb shell run-as <pkg> ...`. The
+ * previous location `/sdcard/Download/` is unreadable to the app on
+ * Android 11+ when written by adb shell (scoped storage / EACCES).
  */
 class AdbBridgeReceiver : BroadcastReceiver() {
 
@@ -24,46 +28,40 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         const val ACTION_LIST_NOTIFICATIONS = "com.example.wifimcpcompanion.LIST_NOTIFICATIONS"
         const val ACTION_NOTIFICATION_STATUS = "com.example.wifimcpcompanion.NOTIFICATION_STATUS"
 
-        const val EXTRA_CONFIG_FILE = "config_file"
-
-        private val COMMAND_FILE = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            "wifi_mcp_command.json"
-        )
-        private val RESULT_FILE = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            "wifi_mcp_result.json"
-        )
+        private const val COMMAND_FILE_NAME = "wifi_mcp_command.json"
+        private const val RESULT_FILE_NAME = "wifi_mcp_result.json"
     }
+
+    private fun commandFile(context: Context) = File(context.filesDir, COMMAND_FILE_NAME)
+    private fun resultFile(context: Context) = File(context.filesDir, RESULT_FILE_NAME)
 
     override fun onReceive(context: Context, intent: Intent) {
         Log.i(TAG, "Received broadcast: ${intent.action}")
 
         try {
             when (intent.action) {
-                ACTION_CONNECT_ENTERPRISE -> handleConnectEnterprise(context, intent)
-                ACTION_INSTALL_CERTIFICATE -> handleInstallCertificate(context, intent)
+                ACTION_CONNECT_ENTERPRISE -> handleConnectEnterprise(context)
+                ACTION_INSTALL_CERTIFICATE -> handleInstallCertificate(context)
                 ACTION_LIST_CERTIFICATES -> handleListCertificates(context)
-                ACTION_DISCONNECT -> handleDisconnect(context, intent)
-                ACTION_LIST_NOTIFICATIONS -> handleListNotifications(intent)
-                ACTION_NOTIFICATION_STATUS -> handleNotificationStatus()
+                ACTION_DISCONNECT -> handleDisconnect(context)
+                ACTION_LIST_NOTIFICATIONS -> handleListNotifications(context)
+                ACTION_NOTIFICATION_STATUS -> handleNotificationStatus(context)
                 else -> {
                     Log.w(TAG, "Unknown action: ${intent.action}")
-                    writeResult(false, "Unknown action", mapOf("action" to (intent.action ?: "null")))
+                    writeResult(context, false, "Unknown action", mapOf("action" to (intent.action ?: "null")))
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error processing broadcast", e)
-            writeResult(false, e.message ?: "Unknown error", mapOf("action" to (intent.action ?: "null")))
+            writeResult(context, false, e.message ?: "Unknown error", mapOf("action" to (intent.action ?: "null")))
         }
     }
 
-    private fun handleConnectEnterprise(context: Context, intent: Intent) {
-        val configFile = intent.getStringExtra(EXTRA_CONFIG_FILE) ?: COMMAND_FILE.absolutePath
-        val config = readConfigFile(configFile)
+    private fun handleConnectEnterprise(context: Context) {
+        val config = readConfigFile(commandFile(context))
 
         if (config == null) {
-            writeResult(false, "Failed to read config file", mapOf("action" to "connect_enterprise"))
+            writeResult(context, false, "Failed to read config file", mapOf("action" to "connect_enterprise"))
             return
         }
 
@@ -103,6 +101,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
             "tls" -> {
                 if (clientCertificate == null || privateKey == null) {
                     writeResult(
+                        context,
                         false,
                         "Client certificate and private key are required for EAP-TLS",
                         mapOf("action" to "connect_enterprise", "ssid" to ssid, "eapMethod" to eapMethod)
@@ -121,6 +120,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
             }
             else -> {
                 writeResult(
+                    context,
                     false,
                     "Unknown EAP method: $eapMethod",
                     mapOf("action" to "connect_enterprise", "ssid" to ssid)
@@ -130,6 +130,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         }
 
         writeResult(
+            context,
             result.success,
             result.message ?: result.error ?: "Unknown",
             mapOf(
@@ -140,12 +141,11 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         )
     }
 
-    private fun handleInstallCertificate(context: Context, intent: Intent) {
-        val configFile = intent.getStringExtra(EXTRA_CONFIG_FILE) ?: COMMAND_FILE.absolutePath
-        val config = readConfigFile(configFile)
+    private fun handleInstallCertificate(context: Context) {
+        val config = readConfigFile(commandFile(context))
 
         if (config == null) {
-            writeResult(false, "Failed to read config file", mapOf("action" to "install_certificate"))
+            writeResult(context, false, "Failed to read config file", mapOf("action" to "install_certificate"))
             return
         }
 
@@ -179,6 +179,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         }
 
         writeResult(
+            context,
             result.success,
             result.message ?: result.error ?: "Unknown",
             mapOf(
@@ -189,16 +190,16 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         )
     }
 
-    private fun handleListNotifications(intent: Intent) {
+    private fun handleListNotifications(context: Context) {
         // Optional filter params from the command file (sinceMs, packageFilter, limit).
-        val configFile = intent.getStringExtra(EXTRA_CONFIG_FILE)
-        val cfg = configFile?.let { readConfigFile(it) }
+        val cfg = readConfigFile(commandFile(context))
         val sinceMs = cfg?.optLong("sinceMs", 0L) ?: 0L
         val packageFilter = cfg?.optString("packageFilter", null)
         val limit = cfg?.optInt("limit", 50) ?: 50
 
         if (!NotificationCaptureService.listenerConnected) {
             writeResult(
+                context,
                 false,
                 "NotificationCaptureService is not connected. Has notification access been granted? See Settings → Notifications → Notification access.",
                 mapOf("action" to "list_notifications")
@@ -223,6 +224,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
             .toList()
 
         writeResult(
+            context,
             true,
             "Returned ${matches.size} notification(s)",
             mapOf(
@@ -233,8 +235,9 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         )
     }
 
-    private fun handleNotificationStatus() {
+    private fun handleNotificationStatus(context: Context) {
         writeResult(
+            context,
             true,
             if (NotificationCaptureService.listenerConnected) "Notification listener connected" else "Notification access not granted",
             mapOf(
@@ -250,6 +253,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         val certificates = certManager.listCertificates()
 
         writeResult(
+            context,
             true,
             "Found ${certificates.size} certificates",
             mapOf(
@@ -259,9 +263,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         )
     }
 
-    private fun handleDisconnect(context: Context, intent: Intent) {
-        val configFile = intent.getStringExtra(EXTRA_CONFIG_FILE) ?: COMMAND_FILE.absolutePath
-        val config = readConfigFile(configFile)
+    private fun handleDisconnect(context: Context) {
+        val config = readConfigFile(commandFile(context))
 
         val ssid = config?.optString("ssid", null)
 
@@ -270,31 +273,30 @@ class AdbBridgeReceiver : BroadcastReceiver() {
             val removed = wifiManager.removeNetworkSuggestion(ssid)
 
             writeResult(
+                context,
                 removed,
                 if (removed) "Network suggestion removed" else "Failed to remove network suggestion",
                 mapOf("action" to "disconnect", "ssid" to ssid)
             )
         } else {
-            writeResult(false, "SSID is required for disconnect", mapOf("action" to "disconnect"))
+            writeResult(context, false, "SSID is required for disconnect", mapOf("action" to "disconnect"))
         }
     }
 
-    private fun readConfigFile(path: String): JSONObject? {
+    private fun readConfigFile(file: File): JSONObject? {
         return try {
-            val file = File(path)
             if (!file.exists()) {
-                Log.e(TAG, "Config file not found: $path")
+                Log.e(TAG, "Config file not found: ${file.absolutePath}")
                 return null
             }
-            val content = file.readText()
-            JSONObject(content)
+            JSONObject(file.readText())
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to read config file: $path", e)
+            Log.e(TAG, "Failed to read config file: ${file.absolutePath}", e)
             null
         }
     }
 
-    private fun writeResult(success: Boolean, message: String, extra: Map<String, Any> = emptyMap()) {
+    private fun writeResult(context: Context, success: Boolean, message: String, extra: Map<String, Any> = emptyMap()) {
         try {
             val result = JSONObject().apply {
                 put("success", success)
@@ -305,9 +307,10 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                 }
             }
 
-            RESULT_FILE.parentFile?.mkdirs()
-            RESULT_FILE.writeText(result.toString(2))
-            Log.i(TAG, "Result written to ${RESULT_FILE.absolutePath}")
+            val outFile = resultFile(context)
+            outFile.parentFile?.mkdirs()
+            outFile.writeText(result.toString(2))
+            Log.i(TAG, "Result written to ${outFile.absolutePath}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to write result file", e)
         }

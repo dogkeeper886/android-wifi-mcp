@@ -1,8 +1,9 @@
 import { AdbClient } from './adb-client.js';
 
 const COMPANION_PACKAGE = 'com.example.wifimcpcompanion';
-const COMMAND_FILE = '/sdcard/Download/wifi_mcp_command.json';
-const RESULT_FILE = '/sdcard/Download/wifi_mcp_result.json';
+// IPC files live in the companion app's private filesDir, accessed via run-as.
+const COMMAND_FILE_REL = 'files/wifi_mcp_command.json';
+const RESULT_FILE_REL = 'files/wifi_mcp_result.json';
 const RESULT_TIMEOUT = 10000; // 10s for a single broadcast round-trip
 
 /**
@@ -22,7 +23,7 @@ export class NotificationCommands {
   }
 
   async getStatus(): Promise<NotificationStatus> {
-    await this.adb.shell(`rm -f ${RESULT_FILE}`);
+    await this.clearResultFile();
     await this.adb.shell(
       `am broadcast -a ${COMPANION_PACKAGE}.NOTIFICATION_STATUS -n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
     );
@@ -58,9 +59,9 @@ export class NotificationCommands {
       config.limit = opts.limit;
     }
     await this.writeCommandFile(config);
-    await this.adb.shell(`rm -f ${RESULT_FILE}`);
+    await this.clearResultFile();
     await this.adb.shell(
-      `am broadcast -a ${COMPANION_PACKAGE}.LIST_NOTIFICATIONS -n ${COMPANION_PACKAGE}/.AdbBridgeReceiver --es config_file "${COMMAND_FILE}"`
+      `am broadcast -a ${COMPANION_PACKAGE}.LIST_NOTIFICATIONS -n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
     );
     const result = await this.waitForResult();
     if (!result) {
@@ -136,8 +137,14 @@ export class NotificationCommands {
 
   private async writeCommandFile(payload: object): Promise<void> {
     const json = JSON.stringify(payload);
-    const escaped = json.replace(/'/g, "'\\''");
-    await this.adb.shell(`echo '${escaped}' > ${COMMAND_FILE}`);
+    const b64 = Buffer.from(json, 'utf-8').toString('base64');
+    await this.adb.shell(
+      `run-as ${COMPANION_PACKAGE} sh -c 'echo ${b64} | base64 -d > ${COMMAND_FILE_REL}'`
+    );
+  }
+
+  private async clearResultFile(): Promise<void> {
+    await this.adb.shell(`run-as ${COMPANION_PACKAGE} rm -f ${RESULT_FILE_REL}`);
   }
 
   private async waitForResult(): Promise<Record<string, unknown> | null> {
@@ -145,11 +152,13 @@ export class NotificationCommands {
     const pollInterval = 300;
     while (Date.now() - start < RESULT_TIMEOUT) {
       await new Promise((res) => setTimeout(res, pollInterval));
-      const cat = await this.adb.shell(`cat ${RESULT_FILE} 2>/dev/null`);
+      const cat = await this.adb.shell(
+        `run-as ${COMPANION_PACKAGE} cat ${RESULT_FILE_REL} 2>/dev/null`
+      );
       if (cat.success && cat.stdout.trim()) {
         try {
           const parsed = JSON.parse(cat.stdout) as Record<string, unknown>;
-          await this.adb.shell(`rm -f ${RESULT_FILE}`);
+          await this.clearResultFile();
           return parsed;
         } catch {
           // partial write — keep polling

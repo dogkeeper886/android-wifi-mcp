@@ -6,8 +6,13 @@ import {
 } from '../types.js';
 
 const COMPANION_PACKAGE = 'com.example.wifimcpcompanion';
-const COMMAND_FILE = '/sdcard/Download/wifi_mcp_command.json';
-const RESULT_FILE = '/sdcard/Download/wifi_mcp_result.json';
+// IPC files live in the companion app's private filesDir, accessed via
+// `run-as`. /sdcard/Download/ was the previous location but Android 11+
+// scoped storage blocks the app from reading shell-written files there.
+const COMMAND_FILE_NAME = 'wifi_mcp_command.json';
+const RESULT_FILE_NAME = 'wifi_mcp_result.json';
+const RESULT_FILE_REL = `files/${RESULT_FILE_NAME}`;
+const COMMAND_FILE_REL = `files/${COMMAND_FILE_NAME}`;
 const RESULT_TIMEOUT = 30000; // 30 seconds
 
 export class EnterpriseWifiCommands {
@@ -67,13 +72,12 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
-    await this.adb.shell(`rm -f ${RESULT_FILE}`);
+    await this.clearResultFile();
 
     // Send broadcast to companion app
     const broadcastResult = await this.adb.shell(
       `am broadcast -a ${COMPANION_PACKAGE}.CONNECT_ENTERPRISE ` +
-      `-n ${COMPANION_PACKAGE}/.AdbBridgeReceiver ` +
-      `--es config_file "${COMMAND_FILE}"`
+      `-n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
     );
 
     if (!broadcastResult.success) {
@@ -124,13 +128,12 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
-    await this.adb.shell(`rm -f ${RESULT_FILE}`);
+    await this.clearResultFile();
 
     // Send broadcast to companion app
     const broadcastResult = await this.adb.shell(
       `am broadcast -a ${COMPANION_PACKAGE}.INSTALL_CERTIFICATE ` +
-      `-n ${COMPANION_PACKAGE}/.AdbBridgeReceiver ` +
-      `--es config_file "${COMMAND_FILE}"`
+      `-n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
     );
 
     if (!broadcastResult.success) {
@@ -153,19 +156,26 @@ export class EnterpriseWifiCommands {
   }
 
   /**
-   * Write command payload to file on device
+   * Write command payload into the companion app's private filesDir via run-as.
+   * Payload is base64-encoded so embedded JSON quotes / cert hyphens cannot
+   * break shell escaping.
    */
   private async writeCommandFile(payload: object): Promise<void> {
     const json = JSON.stringify(payload);
-    // Escape for shell and write to file
-    const escaped = json.replace(/'/g, "'\\''");
-    await this.adb.shell(`echo '${escaped}' > ${COMMAND_FILE}`);
+    const b64 = Buffer.from(json, 'utf-8').toString('base64');
+    await this.adb.shell(
+      `run-as ${COMPANION_PACKAGE} sh -c 'echo ${b64} | base64 -d > ${COMMAND_FILE_REL}'`
+    );
+  }
+
+  private async clearResultFile(): Promise<void> {
+    await this.adb.shell(`run-as ${COMPANION_PACKAGE} rm -f ${RESULT_FILE_REL}`);
   }
 
   /**
    * Poll for the result file the companion app writes after handling a broadcast.
    *
-   * Caller must `rm -f ${RESULT_FILE}` between writing the command file and
+   * Caller must call `clearResultFile()` between writing the command file and
    * sending the broadcast. The receiver runs synchronously (~50 ms) so a
    * post-broadcast cleanup would race the app's write and produce spurious
    * timeouts.
@@ -177,13 +187,13 @@ export class EnterpriseWifiCommands {
     while (Date.now() - startTime < RESULT_TIMEOUT) {
       await new Promise(resolve => setTimeout(resolve, pollInterval));
 
-      // Check if result file exists
-      const checkResult = await this.adb.shell(`cat ${RESULT_FILE} 2>/dev/null`);
+      const checkResult = await this.adb.shell(
+        `run-as ${COMPANION_PACKAGE} cat ${RESULT_FILE_REL} 2>/dev/null`
+      );
       if (checkResult.success && checkResult.stdout.trim()) {
         try {
           const result = JSON.parse(checkResult.stdout) as T;
-          // Clean up
-          await this.adb.shell(`rm -f ${RESULT_FILE}`);
+          await this.clearResultFile();
           return result;
         } catch {
           // JSON not ready yet, continue waiting
@@ -209,12 +219,11 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
-    await this.adb.shell(`rm -f ${RESULT_FILE}`);
+    await this.clearResultFile();
 
     await this.adb.shell(
       `am broadcast -a ${COMPANION_PACKAGE}.LIST_CERTIFICATES ` +
-      `-n ${COMPANION_PACKAGE}/.AdbBridgeReceiver ` +
-      `--es config_file "${COMMAND_FILE}"`
+      `-n ${COMPANION_PACKAGE}/.AdbBridgeReceiver`
     );
 
     const result = await this.waitForResult<{ certificates: string[] }>('list');

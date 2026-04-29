@@ -1,8 +1,10 @@
-import { exec, spawn } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { promisify } from 'util';
 import { Device, DeviceInfo, AdbResult } from '../types.js';
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
+
+const MAX_OUTPUT_BUFFER = 1024 * 1024 * 8; // 8 MB; covers ui_dump and wifi_scan with headroom
 
 export class AdbClient {
   private adbPath: string;
@@ -13,15 +15,22 @@ export class AdbClient {
   }
 
   /**
-   * Execute an ADB command
+   * Execute an ADB command.
+   *
+   * Uses `execFile` so adb is invoked directly with an args array — no host
+   * /bin/sh layer between us and adb. That keeps shell metacharacters in
+   * shell-command args (`|`, `>`, single quotes around `sh -c '...'`)
+   * intact when adb forwards them to the device shell.
    */
   async exec(args: string[], timeout: number = 30000): Promise<AdbResult> {
     const deviceArgs = this.selectedDevice ? ['-s', this.selectedDevice] : [];
     const fullArgs = [...deviceArgs, ...args];
-    const command = `${this.adbPath} ${fullArgs.join(' ')}`;
 
     try {
-      const { stdout, stderr } = await execAsync(command, { timeout });
+      const { stdout, stderr } = await execFileAsync(this.adbPath, fullArgs, {
+        timeout,
+        maxBuffer: MAX_OUTPUT_BUFFER,
+      });
       return {
         success: true,
         stdout: stdout.trim(),
