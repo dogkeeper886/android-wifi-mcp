@@ -68,6 +68,10 @@ export class EnterpriseWifiCommands {
 
     await this.writeCommandFile(commandPayload);
 
+    // Clear stale result BEFORE broadcasting; the receiver runs synchronously
+    // and a post-broadcast rm would delete the live result.
+    await this.adb.shell(`rm -f ${RESULT_FILE}`);
+
     // Send broadcast to companion app
     const broadcastResult = await this.adb.shell(
       `am broadcast -a ${COMPANION_PACKAGE}.CONNECT_ENTERPRISE ` +
@@ -124,6 +128,10 @@ export class EnterpriseWifiCommands {
 
     await this.writeCommandFile(commandPayload);
 
+    // Clear stale result BEFORE broadcasting; the receiver runs synchronously
+    // and a post-broadcast rm would delete the live result.
+    await this.adb.shell(`rm -f ${RESULT_FILE}`);
+
     // Send broadcast to companion app
     const broadcastResult = await this.adb.shell(
       `am broadcast -a ${COMPANION_PACKAGE}.INSTALL_CERTIFICATE ` +
@@ -167,9 +175,6 @@ export class EnterpriseWifiCommands {
     const startTime = Date.now();
     const pollInterval = 500; // 500ms
 
-    // Clear any existing result file
-    await this.adb.shell(`rm -f ${RESULT_FILE}`);
-
     while (Date.now() - startTime < RESULT_TIMEOUT) {
       await new Promise(resolve => setTimeout(resolve, pollInterval));
 
@@ -205,6 +210,10 @@ export class EnterpriseWifiCommands {
     };
 
     await this.writeCommandFile(commandPayload);
+
+    // Clear stale result BEFORE broadcasting; the receiver runs synchronously
+    // and a post-broadcast rm would delete the live result.
+    await this.adb.shell(`rm -f ${RESULT_FILE}`);
 
     await this.adb.shell(
       `am broadcast -a ${COMPANION_PACKAGE}.LIST_CERTIFICATES ` +
