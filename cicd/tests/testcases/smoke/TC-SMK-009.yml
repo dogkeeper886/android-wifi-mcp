@@ -1,5 +1,5 @@
 id: TC-SMK-009
-name: device_settings_put round-trips a value through the system namespace
+name: device_settings_put / get / delete round-trip through the system namespace
 suite: smoke
 tags: [smoke, settings]
 priority: 9
@@ -22,9 +22,26 @@ steps:
     rejectPatterns:
       - "isError"
 
+  - name: Delete the sentinel
+    command: npx tsx cicd/tests/src/mcp-client.ts device_settings_delete '{"namespace":"system","key":"wifi_mcp_smoke_{{TEST_RUN_ID}}"}'
+    expectPatterns:
+      - "success.*true"
+      - "wifi_mcp_smoke_{{TEST_RUN_ID}}"
+    rejectPatterns:
+      - "isError"
+
+  - name: Verify the sentinel is gone — get returns value null
+    command: npx tsx cicd/tests/src/mcp-client.ts device_settings_get '{"namespace":"system","key":"wifi_mcp_smoke_{{TEST_RUN_ID}}"}'
+    expectPatterns:
+      - "value.*null"
+    rejectPatterns:
+      - "isError"
+
 criteria: |
-  Verify a put-then-get round-trip on a TEST_RUN_ID-namespaced sentinel key.
-  - Put returns success
-  - Get returns the same value we wrote
-  - Sentinel key is namespaced by TEST_RUN_ID so concurrent runs don't collide
+  Verify the put → get → delete → get(null) round-trip on a TEST_RUN_ID-namespaced
+  sentinel key.
+  - Put returns success and the sentinel becomes readable
+  - Delete returns success
+  - Subsequent get returns value: null, confirming the row is gone
+  - The test is fully self-cleaning — no orphan sentinels accumulate across runs
   - Stays in the `system` namespace (cheapest, no security implications)

@@ -18,7 +18,7 @@ Claude Code  ──MCP──►  android-wifi-mcp (this server)  ──ADB──
 ```
 
 - **Server entrypoint:** `src/index.ts` picks transport (HTTP default, `--stdio` for stdio).
-- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 28 native tools.
+- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 29 native tools.
 - **Proxy:** `src/mcp/upstream-proxy.ts` spawns upstream MCP subprocesses on startup and merges their tools into one tools/list. Configured via `UPSTREAM_MCP` env var.
 - **ADB layer:** `src/adb/` — `adb-client.ts` (process wrapper), `device-manager.ts` (multi-device), then per-domain wrappers: `wifi-commands.ts`, `screenshot-commands.ts`, `sms-commands.ts`, `enterprise-wifi.ts`, `settings-commands.ts`, `file-commands.ts`.
 - **Companion app:** `companion-app/` — Kotlin Android app that handles 802.1X enterprise WiFi (the only flow that needs an on-device daemon today).
@@ -57,7 +57,7 @@ To add a test, use the **`ci-testcase`** project skill (`.claude/skills/ci-testc
 
 ## Tool surface
 
-28 native tools across 7 categories (`device_*` mgmt, `device_settings_*`, `device_*_file`, `wifi_*`, `wifi_*_enterprise`, `network_*`, `sms_*` / `notifications_*`). Generic UI automation (`device_tap` / `device_swipe` / `device_keyevent` / `device_type_text` / `device_open_url` / `device_launch_app` / `device_list_packages` / `device_ui_dump`) was intentionally removed in #20 — compose with [`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp) for selector-based UI work and `playwright-android` for browser DOM. With `UPSTREAM_MCP=playwright=...` set, an additional 21 `browser_*` tools from `@playwright/mcp` are proxied through — **49 total**.
+29 native tools across 7 categories (`device_*` mgmt, `device_settings_*`, `device_*_file`, `wifi_*`, `wifi_*_enterprise`, `network_*`, `sms_*` / `notifications_*`). Generic UI automation (`device_tap` / `device_swipe` / `device_keyevent` / `device_type_text` / `device_open_url` / `device_launch_app` / `device_list_packages` / `device_ui_dump`) was intentionally removed in #20 — compose with [`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp) for selector-based UI work and `playwright-android` for browser DOM. With `UPSTREAM_MCP=playwright=...` set, an additional 21 `browser_*` tools from `@playwright/mcp` are proxied through — **50 total**.
 
 The unified namespace is the design goal: Claude Code sees one server, gets one tools/list. Don't add a feature here that exists in a mature upstream — proxy it instead. (#10 was closed and #14 implemented for exactly this reason.)
 

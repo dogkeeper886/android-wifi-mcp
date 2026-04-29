@@ -1,0 +1,30 @@
+id: TC-SMK-013
+name: device_settings_get reads default_input_method from the secure namespace
+suite: smoke
+tags: [smoke, settings]
+priority: 13
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Read default_input_method from the secure namespace
+    command: npx tsx cicd/tests/src/mcp-client.ts device_settings_get '{"namespace":"secure","key":"default_input_method"}'
+    expectPatterns:
+      - "namespace.*secure"
+      - "key.*default_input_method"
+      - "value"
+    rejectPatterns:
+      - "isError"
+      - "value.*null"
+
+criteria: |
+  Verify device_settings_get reads from the `secure` namespace.
+  Closes a coverage gap noted in PR #29 review — TC-SMK-008 covered
+  global, TC-SMK-009 covered system, but secure had no coverage despite
+  being the highest-stakes namespace for QA flows (auth / lockscreen /
+  IME / accessibility).
+
+  - Tool returns the namespace and key fields
+  - Value is non-null (default_input_method is always populated on a
+    booted Android device — there's always some IME registered)
+  - No specific value asserted (varies across OEM keyboards)
