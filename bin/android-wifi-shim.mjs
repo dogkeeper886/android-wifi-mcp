@@ -63,6 +63,11 @@ try {
   process.exit(1);
 }
 
+if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+  process.stderr.write(`android-wifi-shim: backend URL must use http:// or https://, got '${parsedUrl.protocol}'\n`);
+  process.exit(1);
+}
+
 const clientTransport = new StreamableHTTPClientTransport(parsedUrl);
 const client = new Client({ name: 'android-wifi-shim', version: '1.0.0' });
 
