@@ -99,12 +99,13 @@ Claude orchestrates the seven steps. No code on your side beyond registering the
 |---|---|---|
 | `curl http://localhost:9222/json/version` returns nothing | Canary not running, or wrong app | Foreground Canary on the device; verify it's `com.chrome.canary` not stable Chrome (`com.android.chrome`) |
 | `adb forward` succeeds but the curl hangs | Stable Chrome was forwarded by accident | The socket name `localabstract:chrome_devtools_remote` is shared — only one Chrome variant should be in foreground. Force-stop the others |
-| `playwright-android` reports `Connected` in `claude mcp list` but `browser_snapshot` fails | Bridge or Canary not up at call time | The MCP server is connected; the CDP endpoint isn't. Run the `adb forward` command and foreground Canary, then retry the tool call |
+| `playwright-android` reports `Connected` in `claude mcp list` but `browser_snapshot` fails immediately on first call | Bridge or Canary not up at call time | The MCP server is connected; the CDP endpoint isn't. Run the `adb forward` command and foreground Canary, then retry the tool call |
+| `browser_*` calls fail with `Target page, context or browser has been closed`, even after `adb forward` is restored and `curl /json/version` returns fresh JSON | The upstream MCP cached a `Page` handle that died (typically after `wifi_disconnect` or device sleep). `adb forward` repairs the bridge but the cache is in the upstream's process memory | Call `proxy_restart {"name":"playwright"}` (assuming you registered the upstream with `name=playwright`). It kills and respawns the upstream subprocess, which reattaches to a fresh CDP target. No host restart needed |
 | Captive-portal page is blank when attached | Navigated into a strict-cert URL | Don't navigate — attach to the page Android opened via the captive-portal notification |
 
 ## What this MCP server does and does not do here
 
-- **Does**: drives the WiFi join (`wifi_connect`), detects the captive portal (`network_check_captive`), pulls / pushes files (`device_push_file` / `device_pull_file`), captures OTPs from notifications.
+- **Does**: drives the WiFi join (`wifi_connect`), detects the captive portal (`network_check_captive`), pulls / pushes files (`device_push_file` / `device_pull_file`), captures OTPs from notifications, recovers the browser MCP after a wifi event (`proxy_restart`).
 - **Does not**: ship a `device_open_canary_cdp` or `device_attach_browser` tool. The bridge is one `adb forward` line that the user sets up once per session — adding a tool around it would be more state to manage than it's worth.
 
 ## See also
