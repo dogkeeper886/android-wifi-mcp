@@ -1,15 +1,8 @@
+import express from 'express';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { DeviceManager } from './adb/device-manager.js';
 import { createMcpServer } from './server.js';
 import { UpstreamProxy, parseUpstreamConfig } from './mcp/upstream-proxy.js';
-
-const useStdio = process.argv.includes('--stdio');
-
-// In stdio mode, stdout is the JSON-RPC channel — any non-protocol bytes
-// break the client. Redirect console.log to stderr so device-manager init
-// messages don't poison the stream.
-if (useStdio) {
-  console.log = console.error;
-}
 
 const deviceManager = new DeviceManager();
 const upstreamProxy = new UpstreamProxy();
@@ -49,23 +42,7 @@ async function initUpstreamProxy(): Promise<void> {
   upstreamProxy.attach(mcpServer);
 }
 
-async function startStdio(): Promise<void> {
-  const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
-
-  await initDevice();
-  await initUpstreamProxy();
-
-  const transport = new StdioServerTransport();
-  await mcpServer.connect(transport);
-  console.error('android-wifi-mcp listening on stdio');
-}
-
-async function startHttp(): Promise<void> {
-  const express = (await import('express')).default;
-  const { StreamableHTTPServerTransport } = await import(
-    '@modelcontextprotocol/sdk/server/streamableHttp.js'
-  );
-
+async function start(): Promise<void> {
   const app = express();
   app.use(express.json());
 
@@ -113,24 +90,19 @@ async function startHttp(): Promise<void> {
   await initDevice();
   await initUpstreamProxy();
 
-  const PORT = process.env.PORT || 3000;
+  const PORT = process.env.PORT ?? '3000';
   const HOST = process.env.HOST || '0.0.0.0';
 
-  app.listen(Number(PORT), HOST, () => {
-    console.log(`android-wifi-mcp server listening on http://${HOST}:${PORT}`);
-    console.log(`MCP endpoint: http://${HOST}:${PORT}/mcp`);
-    console.log(`Health check: http://${HOST}:${PORT}/health`);
+  const httpServer = app.listen(Number(PORT), HOST, () => {
+    const addr = httpServer.address();
+    const actualPort = typeof addr === 'object' && addr ? addr.port : PORT;
+    console.log(`android-wifi-mcp server listening on http://${HOST}:${actualPort}`);
+    console.log(`MCP endpoint: http://${HOST}:${actualPort}/mcp`);
+    console.log(`Health check: http://${HOST}:${actualPort}/health`);
   });
 }
 
-if (useStdio) {
-  startStdio().catch((err) => {
-    console.error('Failed to start stdio server:', err);
-    process.exit(1);
-  });
-} else {
-  startHttp().catch((err) => {
-    console.error('Failed to start HTTP server:', err);
-    process.exit(1);
-  });
-}
+start().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
+});

@@ -100,51 +100,19 @@ cd android-wifi-mcp
 npm install
 npm run build
 npm start             # HTTP transport on http://localhost:3000
-# or
-npm run start:stdio   # stdio transport (no port)
 ```
 
-#### Transport modes
+The server speaks **Streamable HTTP** (the MCP-spec transport). One process serves all connected MCP clients.
 
-The server supports two transports:
+### 4. Configure your MCP client
 
-| Transport | Command | When to use |
-|---|---|---|
-| **HTTP** (default) | `npm start` | Long-running server, multiple clients, ad-hoc curl/health checks |
-| **stdio** | `npm run start:stdio` (or `node dist/index.js --stdio`) | MCP clients that spawn the server as a subprocess (Claude Code, test framework). Recommended — known stable. |
+#### Zed, Cursor, and other MCP clients with native HTTP support
 
-In stdio mode the server reads/writes JSON-RPC on stdin/stdout; all logs go to stderr.
-
-### 4. Configure Claude Code
-
-#### Using Claude Code CLI (Recommended)
-
-**HTTP transport** (requires server running):
 ```bash
 claude mcp add --transport http android-wifi http://localhost:3000/mcp
 ```
 
-**Stdio transport** (auto-starts server, recommended):
-```bash
-claude mcp add --transport stdio android-wifi -- node /path/to/android-wifi-mcp/dist/index.js --stdio
-```
-
-#### Manual JSON Configuration (Alternative)
-
-Add to your MCP settings:
-
-```json
-{
-  "mcpServers": {
-    "android-wifi": {
-      "command": "node",
-      "args": ["/path/to/android-wifi-mcp/dist/index.js", "--stdio"]
-    }
-  }
-}
-```
-
-Or connect via HTTP transport:
+Or in JSON config:
 
 ```json
 {
@@ -154,6 +122,23 @@ Or connect via HTTP transport:
     }
   }
 }
+```
+
+#### Claude Code (uses the bundled stdio shim)
+
+Claude Code's bundled HTTP MCP client crashes when registered against a Streamable HTTP server (issue #7 — bug is in their binary, not ours). Use the stdio shim shipped with this package as the bridge:
+
+```bash
+# After `npm install -g .` (or wherever the package is installed)
+claude mcp add --transport stdio android-wifi android-wifi-shim http://localhost:3000/mcp
+```
+
+The shim is a ~30-LOC Node CLI that pretends to be a stdio MCP server to Claude Code and forwards every call to the HTTP backend. No Python or other extra dependencies — same Node toolchain you already have.
+
+If you didn't install globally:
+
+```bash
+claude mcp add --transport stdio android-wifi node /path/to/android-wifi-mcp/bin/android-wifi-shim.mjs http://localhost:3000/mcp
 ```
 
 ### 5. Setup Enterprise WiFi (Optional)
@@ -454,7 +439,7 @@ The default `UPSTREAM_MCP` in `.env.example` is `@playwright/mcp` — running ou
 
 ## Testing
 
-YAML-driven test framework under `cicd/tests/` runs against an attached Android device using the stdio transport.
+YAML-driven test framework under `cicd/tests/` runs against an attached Android device. Each test step spawns its own server (HTTP transport, OS-assigned port) so per-test `UPSTREAM_MCP` env isolation works the same way it did under stdio.
 
 ### Run smoke tests locally
 
@@ -474,7 +459,7 @@ Results land in `cicd/results/<timestamp>_<suite>/` (`summary.json` plus one `<t
 
 ### How the runner works
 
-- `mcp-client.ts` spawns `node dist/index.js --stdio`, calls one tool, prints the JSON result. Each test step is one such call.
+- `mcp-client.ts` spawns `node dist/index.js` (HTTP, OS-assigned port), waits for the listening line on stderr, connects via `StreamableHTTPClientTransport`, calls one tool, prints the JSON result, then tears the server down. Each test step is one such call.
 - `executor.ts` snapshots WiFi state (enabled flag, current SSID, saved-network IDs) before each test and restores it after — **per-test**, so a failing test cannot poison the next one. Snapshot/restore goes through `adb` directly so the framework doesn't depend on the very thing under test.
 - `simple-judge.ts` decides pass/fail from exit codes plus `expectPatterns`/`rejectPatterns`.
 
@@ -516,7 +501,7 @@ GitHub Actions workflows under `.github/workflows/`:
 ```
 android-wifi-mcp/
 ├── src/
-│   ├── index.ts                # Entry — picks transport (HTTP / stdio)
+│   ├── index.ts                # Entry — HTTP server bootstrap
 │   ├── server.ts               # MCP server factory + tool registrations
 │   ├── types.ts                # TypeScript interfaces
 │   ├── mcp/
@@ -544,7 +529,7 @@ android-wifi-mcp/
 │   │   │   ├── cli.ts
 │   │   │   ├── executor.ts     # per-test snapshot/restore of device state
 │   │   │   ├── device-state.ts # adb-direct snapshot/restore helpers
-│   │   │   ├── mcp-client.ts   # stdio MCP client
+│   │   │   ├── mcp-client.ts   # HTTP MCP client (spawns server, waits for ready, calls)
 │   │   │   ├── loader.ts, judge/, reporter/, types.ts, config.ts
 │   │   │   └── ...
 │   │   ├── testcases/<suite>/  # smoke, sms, notifications, proxy (wifi/enterprise/portal pending)

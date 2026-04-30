@@ -11,27 +11,34 @@ The user is a QA engineer. Treat this as a test-tool first: prefer reliability, 
 ## Architecture
 
 ```
-Claude Code  ──MCP──►  android-wifi-mcp (this server)  ──ADB──►  phone
-                              │
-                              └──MCP/stdio──►  upstream MCPs (e.g. @playwright/mcp)
-                                                    (transparently proxied — see #14)
+Zed / Cursor / etc.  ──HTTP──►  android-wifi-mcp (this server)  ──ADB──►  phone
+                                       │
+Claude Code ─stdio─► shim ─HTTP─►      │
+                                       └──MCP/stdio──►  upstream MCPs (e.g. @playwright/mcp)
+                                                              (transparently proxied — see #14)
 ```
 
-- **Server entrypoint:** `src/index.ts` picks transport (HTTP default, `--stdio` for stdio).
-- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 29 native tools.
+- **Server entrypoint:** `src/index.ts` boots a long-running HTTP server (Streamable HTTP transport). Stdio support was removed in #51 Phase 0a — Claude Code clients connect via the bundled stdio shim (`bin/android-wifi-shim.mjs`).
+- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 30 native tools.
 - **Proxy:** `src/mcp/upstream-proxy.ts` spawns upstream MCP subprocesses on startup and merges their tools into one tools/list. Configured via `UPSTREAM_MCP` env var.
 - **ADB layer:** `src/adb/` — `adb-client.ts` (process wrapper), `device-manager.ts` (multi-device), then per-domain wrappers: `wifi-commands.ts`, `screenshot-commands.ts`, `sms-commands.ts`, `enterprise-wifi.ts`, `settings-commands.ts`, `file-commands.ts`.
 - **Companion app:** `companion-app/` — Kotlin Android app that handles 802.1X enterprise WiFi (the only flow that needs an on-device daemon today).
 - **Network helpers:** `src/network/network-check.ts`.
 - **Test framework:** `cicd/tests/` — custom YAML-driven runner. See "Tests" below.
 
-## Transport — stdio is primary
+## Transport — HTTP only, with shim for Claude Code
 
-The HTTP transport is **known to crash Claude Code's MCP client** (issue #7, currently low-priority). Stdio is the recommended path for everything: production registration, tests, ad-hoc clients.
+The backend speaks **Streamable HTTP only**. Stdio support in our codebase was deleted in #51 Phase 0a. Reasoning:
 
-- `npm start` → HTTP on `:3000` (kept for manual curl / debugging only)
-- `npm run start:stdio` → stdio (registered with Claude Code via `claude mcp add --transport stdio ...`)
-- `cicd/tests/src/mcp-client.ts` always uses stdio
+- The unified-server vision (one persistent backend, all clients connect to it for shared logging/observability/session routing) needs a long-running process. Stdio's "spawn-per-client" model is incompatible.
+- Modern MCP clients (Zed, Cursor, etc.) speak HTTP natively.
+- Claude Code's bundled HTTP MCP client crashes (issue #7, upstream bug). We sidestep by shipping our own stdio shim — `bin/android-wifi-shim.mjs` — which translates stdio↔HTTP for Claude Code only. The shim is ~30 LOC, lives in our repo, no external dependencies.
+
+Operational notes:
+- `npm start` → HTTP on `:3000` (override via `PORT` env). Pass `PORT=0` to let the OS assign (used by tests).
+- Modern clients: `claude mcp add --transport http android-wifi http://localhost:3000/mcp`.
+- Claude Code: `claude mcp add --transport stdio android-wifi android-wifi-shim http://localhost:3000/mcp` (after `npm install -g .`).
+- `cicd/tests/src/mcp-client.ts` spawns its own server (HTTP, OS-assigned port) per test step, parses the listening line from stderr, connects via `StreamableHTTPClientTransport`, calls one tool, tears down. Per-test isolation matches the prior stdio model.
 
 ## Tests
 
@@ -39,7 +46,7 @@ YAML-driven framework under `cicd/tests/`, ported from `ruckus1-mcp` and adapted
 
 - **`cicd/tests/src/cli.ts`** — `commander`-based CLI: `run` (with `--suite`, `--tag`, `--id` filters) and `list`.
 - **`cicd/tests/src/executor.ts`** — runs each test step as a shell command, captures stdout/stderr, applies `expectPatterns` / `rejectPatterns`. **Per-test** snapshot/restore of WiFi state via `device-state.ts` so a failing test cannot poison the next.
-- **`cicd/tests/src/mcp-client.ts`** — spawns `node dist/index.js --stdio`, calls one tool, prints JSON result.
+- **`cicd/tests/src/mcp-client.ts`** — spawns `node dist/index.js` (HTTP, `PORT=0`), parses the listening URL from stderr, connects via `StreamableHTTPClientTransport`, calls one tool, prints JSON result, tears server down.
 
 Test cases live in `cicd/tests/testcases/<suite>/TC-<SUITE>-NNN.yml`. Suites: `smoke` (read-only + roundtrips), `sms`, `notifications`, `proxy`, plus pending `wifi`/`enterprise`/`portal`. Each test step runs `npx tsx cicd/tests/src/mcp-client.ts <tool> '<args>'`.
 
