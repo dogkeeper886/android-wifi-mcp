@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { DeviceManager } from './adb/device-manager.js';
 import { NetworkCheck } from './network/network-check.js';
 import { EnterpriseWifiCommands } from './adb/enterprise-wifi.js';
+import { UpstreamProxy } from './mcp/upstream-proxy.js';
 import { SecurityType, EapMethod, Phase2Method } from './types.js';
 
 export interface CreateServerResult {
@@ -10,7 +11,10 @@ export interface CreateServerResult {
   nativeToolNames: string[];
 }
 
-export function createMcpServer(deviceManager: DeviceManager): CreateServerResult {
+export function createMcpServer(
+  deviceManager: DeviceManager,
+  upstreamProxy?: UpstreamProxy
+): CreateServerResult {
   const mcpServer = new McpServer({
     name: 'android-wifi-mcp',
     version: '1.0.0',
@@ -888,6 +892,35 @@ export function createMcpServer(deviceManager: DeviceManager): CreateServerResul
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
+    }
+  );
+
+  // ============ Proxy Lifecycle ============
+
+  mcpServer.tool(
+    'proxy_restart',
+    'Tear down and respawn one upstream MCP subprocess by name (e.g. "playwright"). Use after a wifi_disconnect or any device-level event that breaks the upstream\'s cached state — @playwright/mcp keeps a closed Page handle and returns "Target page, context or browser has been closed" forever otherwise. Restoring adb forward alone is not enough; the cache lives in the upstream process memory.',
+    {
+      name: z.string().describe('Upstream name as configured in UPSTREAM_MCP (e.g. "playwright")'),
+    },
+    async ({ name }) => {
+      if (!upstreamProxy) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ error: 'No upstream proxy configured (UPSTREAM_MCP unset)' }, null, 2) }],
+          isError: true,
+        };
+      }
+      try {
+        const status = await upstreamProxy.restartOne(name);
+        return {
+          content: [{ type: 'text', text: JSON.stringify(status, null, 2) }],
+        };
+      } catch (e) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ error: (e as Error).message }, null, 2) }],
+          isError: true,
+        };
+      }
     }
   );
 

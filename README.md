@@ -196,7 +196,7 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 
 ## Available Tools
 
-**29 native tools** in 8 categories below. With the optional `@playwright/mcp` upstream enabled (see [Proxying upstream MCPs](#proxying-upstream-mcps)), an additional **21 `browser_*` tools** are surfaced through the same endpoint for **50 total**.
+**30 native tools** in 9 categories below. With the optional `@playwright/mcp` upstream enabled (see [Proxying upstream MCPs](#proxying-upstream-mcps)), an additional **21 `browser_*` tools** are surfaced through the same endpoint for **51 total**.
 
 ### Device Management
 
@@ -270,6 +270,12 @@ For OTPs that don't come via SMS — WhatsApp, banking apps, email clients, etc.
 |------|-------------|
 | `notifications_list_recent` | List recent captured notifications, optionally filtered by package or body regex |
 | `notifications_wait_for_otp` | Poll captured notifications until a matching OTP arrives or timeout elapses |
+
+### Proxy lifecycle
+
+| Tool | Description |
+|------|-------------|
+| `proxy_restart` | Tear down and respawn one upstream MCP subprocess by name. Use after `wifi_disconnect` or any device-level event that breaks the upstream's cached state — `@playwright/mcp` keeps a closed `Page` handle and surfaces "Target page, context or browser has been closed" for every call until the subprocess is restarted. Restoring `adb forward` alone does not fix it. |
 
 ### Proxied (optional)
 
@@ -444,7 +450,7 @@ Upstreams start eagerly at server boot. On `SIGINT` / `SIGTERM` the server close
 
 ### Verified composition
 
-The default `UPSTREAM_MCP` in `.env.example` is `@playwright/mcp` — running our server with that set yields **50 total tools** (29 native + 21 from `@playwright/mcp`), all reachable from one MCP endpoint. See `cicd/tests/testcases/proxy/TC-PROXY-002.yml` for the end-to-end smoke test.
+The default `UPSTREAM_MCP` in `.env.example` is `@playwright/mcp` — running our server with that set yields **51 total tools** (30 native + 21 from `@playwright/mcp`), all reachable from one MCP endpoint. See `cicd/tests/testcases/proxy/TC-PROXY-002.yml` for the end-to-end smoke test.
 
 ## Testing
 

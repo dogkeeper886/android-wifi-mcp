@@ -145,6 +145,58 @@ export class UpstreamProxy {
     });
   }
 
+  /**
+   * Tear down one upstream and respawn it, re-registering its tools.
+   *
+   * Why this exists: some upstream MCPs (notably `@playwright/mcp`) cache
+   * handles to remote state — e.g. a CDP `Page` — and surface
+   * `Target page, context or browser has been closed` for every subsequent
+   * call once that state dies. The cache lives in the upstream's process
+   * memory and there's no protocol-level reset; the only fix is to kill
+   * and respawn the subprocess. This tool gives the agent a way to do that
+   * in-conversation instead of telling the user to restart the host.
+   */
+  async restartOne(name: string): Promise<UpstreamStatus> {
+    const entry = this.upstreams.get(name);
+    if (!entry) {
+      throw new Error(`No upstream named '${name}' is configured`);
+    }
+
+    // Best-effort close. The transport may already be dead (that is, after
+    // all, why the caller is asking for a restart), so failures here are
+    // expected and non-fatal.
+    try {
+      await entry.client?.close();
+    } catch {
+      // ignore
+    }
+
+    // Drop every tool this upstream had registered. If the respawned
+    // upstream comes back with a different tool list, stale entries
+    // pointing at the dead client must not survive.
+    for (const finalName of entry.toolNameMap.keys()) {
+      this.toolToUpstream.delete(finalName);
+      this.toolDefs.delete(finalName);
+    }
+    entry.toolNameMap.clear();
+    entry.client = undefined;
+    entry.transport = undefined;
+    entry.status.state = 'disconnected';
+    entry.status.toolCount = 0;
+    entry.status.lastError = undefined;
+
+    try {
+      await this.connectOne(entry);
+    } catch (e) {
+      entry.status.state = 'failed';
+      entry.status.lastError = (e as Error).message;
+      throw new Error(
+        `Failed to restart upstream '${name}': ${(e as Error).message}`
+      );
+    }
+    return { ...entry.status };
+  }
+
   async closeAll(): Promise<void> {
     for (const entry of this.upstreams.values()) {
       try {

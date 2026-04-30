@@ -1,0 +1,31 @@
+id: TC-PROXY-003
+name: proxy_restart respawns an upstream and re-registers its tools
+suite: proxy
+tags: [proxy, restart]
+priority: 1
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: mock_echo works, then proxy_restart, then mock_echo still works
+    command: |
+      UPSTREAM_MCP='mock=node cicd/tests/fixtures/mock-mcp-upstream.mjs' \
+        node cicd/tests/fixtures/proxy-restart-roundtrip.mjs
+    expectPatterns:
+      - "MOCK_ECHO: before-restart"
+      - "MOCK_ECHO: after-restart"
+      - "connected"
+    rejectPatterns:
+      - "isError"
+      - "Unknown tool"
+      - "No upstream named"
+
+criteria: |
+  Verify proxy_restart actually tears down and respawns an upstream:
+  - First mock_echo confirms the upstream is healthy and routed.
+  - proxy_restart kills + respawns the mock subprocess and reports
+    state: "connected" with toolCount > 0.
+  - Second mock_echo proves the new subprocess re-registered mock_echo
+    and the proxy routes through to the new process (a stale tool map
+    pointing at the dead client would surface "Unknown tool" or a
+    transport error).

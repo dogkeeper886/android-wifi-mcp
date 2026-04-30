@@ -12,8 +12,8 @@ if (useStdio) {
 }
 
 const deviceManager = new DeviceManager();
-const { server: mcpServer, nativeToolNames } = createMcpServer(deviceManager);
 const upstreamProxy = new UpstreamProxy();
+const { server: mcpServer, nativeToolNames } = createMcpServer(deviceManager, upstreamProxy);
 
 const shutdown = async () => {
   console.log('Shutting down...');
