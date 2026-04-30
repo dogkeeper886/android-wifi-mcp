@@ -906,7 +906,7 @@ export function createMcpServer(
     async ({ name }) => {
       if (!upstreamProxy) {
         return {
-          content: [{ type: 'text', text: JSON.stringify({ error: 'No upstream proxy configured (UPSTREAM_MCP unset)' }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ error: 'No upstream proxy attached to this server' }, null, 2) }],
           isError: true,
         };
       }

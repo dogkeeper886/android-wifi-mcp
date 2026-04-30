@@ -162,9 +162,12 @@ export class UpstreamProxy {
       throw new Error(`No upstream named '${name}' is configured`);
     }
 
-    // Best-effort close. The transport may already be dead (that is, after
-    // all, why the caller is asking for a restart), so failures here are
-    // expected and non-fatal.
+    // Best-effort close of the current client. The transport may already
+    // be dead (that's usually why the caller is asking for a restart), so
+    // failures here are expected and non-fatal. We leave entry.client
+    // referencing the closed object until connectOne overwrites it; that
+    // also keeps the type as `Client | undefined` so the partial-failure
+    // close in the catch block below doesn't trip TS narrowing.
     try {
       await entry.client?.close();
     } catch {
@@ -179,8 +182,6 @@ export class UpstreamProxy {
       this.toolDefs.delete(finalName);
     }
     entry.toolNameMap.clear();
-    entry.client = undefined;
-    entry.transport = undefined;
     entry.status.state = 'disconnected';
     entry.status.toolCount = 0;
     entry.status.lastError = undefined;
@@ -188,6 +189,17 @@ export class UpstreamProxy {
     try {
       await this.connectOne(entry);
     } catch (e) {
+      // connectOne assigns entry.client / entry.transport before listTools,
+      // so a partial success leaves a half-spawned subprocess attached. Close
+      // whatever ended up there so we don't leak a process and poison the
+      // next restart attempt.
+      try {
+        await entry.client?.close();
+      } catch {
+        // ignore
+      }
+      entry.client = undefined;
+      entry.transport = undefined;
       entry.status.state = 'failed';
       entry.status.lastError = (e as Error).message;
       throw new Error(
