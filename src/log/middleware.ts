@@ -3,6 +3,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { recordToolCall, type ToolCallRecord } from '../db/writer.js';
 import { redactArgs } from './redact.js';
+import { attributeFailure, type RelatedEvent } from './attribution.js';
 import { logger } from './logger.js';
 import { getTraceId } from './trace-context.js';
 import type { UpstreamProxy } from '../mcp/upstream-proxy.js';
@@ -14,6 +15,16 @@ type ToolsCallHandler = (request: any, extra: any) => Promise<any>;
 type Recorder = (call: ToolCallRecord) => Promise<void>;
 
 /**
+ * Loose dep on the device observer so the middleware can correlate failed
+ * tool calls with recent device transitions (Phase 4 attribution). Pick'd
+ * to a single method for testability — tests pass `{ getRecent: () => [...] }`
+ * without standing up the real observer.
+ */
+export interface RecentEventsSource {
+  getRecent(limit?: number): RelatedEvent[];
+}
+
+/**
  * Build a handler that wraps `original` with the recording layer. Exported so
  * unit tests can drive the wrapping in isolation, without standing up an
  * McpServer.
@@ -21,7 +32,8 @@ type Recorder = (call: ToolCallRecord) => Promise<void>;
 export function buildRecordingHandler(
   original: ToolsCallHandler,
   proxy?: Pick<UpstreamProxy, 'getSurfaceForTool'>,
-  recorder: Recorder = recordToolCall
+  recorder: Recorder = recordToolCall,
+  observer?: RecentEventsSource
 ): ToolsCallHandler {
   return async (request, extra) => {
     const name = request.params.name;
@@ -35,7 +47,7 @@ export function buildRecordingHandler(
     const traceId = getTraceId() ?? randomUUID();
 
     let result: unknown;
-    let errorPayload: unknown;
+    let errorPayload: Record<string, unknown> | undefined;
     try {
       result = await original(request, extra);
       // Tools signal failure two ways: throw, or return { isError: true, ... }.
@@ -62,6 +74,20 @@ export function buildRecordingHandler(
       throw err;
     } finally {
       const completedAt = new Date();
+
+      // Phase 4: when the call failed, look at recent device transitions and
+      // try to classify the cause. Attribution only attaches when there's a
+      // genuinely related event in the failure window; tool-internal errors
+      // (bad args, timeouts, etc.) leave the column unset.
+      if (errorPayload && observer) {
+        const events = observer.getRecent(32);
+        const attribution = attributeFailure(
+          { started_at: startedAt, completed_at: completedAt },
+          events
+        );
+        if (attribution) errorPayload.attribution = attribution;
+      }
+
       void recorder({
         trace_id: traceId,
         tool_name: name,
@@ -87,7 +113,8 @@ export function buildRecordingHandler(
  */
 export function installCallRecording(
   mcpServer: McpServer,
-  proxy?: UpstreamProxy
+  proxy?: UpstreamProxy,
+  observer?: RecentEventsSource
 ): void {
   const server = mcpServer.server;
   const handlers = (server as any)._requestHandlers as Map<string, ToolsCallHandler>;
@@ -97,6 +124,9 @@ export function installCallRecording(
       'McpServer has no tools/call handler — installCallRecording must run after createMcpServer'
     );
   }
-  server.setRequestHandler(CallToolRequestSchema, buildRecordingHandler(original, proxy));
+  server.setRequestHandler(
+    CallToolRequestSchema,
+    buildRecordingHandler(original, proxy, recordToolCall, observer)
+  );
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

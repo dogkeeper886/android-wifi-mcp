@@ -118,7 +118,7 @@ async function start(): Promise<void> {
   await initDevice();
   deviceObserver.start();
   await initUpstreamProxy();
-  installCallRecording(mcpServer, upstreamProxy);
+  installCallRecording(mcpServer, upstreamProxy, deviceObserver);
 
   const PORT = process.env.PORT ?? '3000';
   const HOST = process.env.HOST || '0.0.0.0';
