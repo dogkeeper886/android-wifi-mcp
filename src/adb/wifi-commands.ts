@@ -180,18 +180,27 @@ export class WifiCommands {
       };
     }
 
-    // Wait for connection to establish
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Poll for L2 association. `cmd wifi connect-network` returns before
+    // the supplicant has converged, so a single fixed sleep + check
+    // false-negatived on slow associations (DFS scan, marginal RSSI). See #65.
+    const VERIFY_TIMEOUT_MS = 10_000;
+    const POLL_INTERVAL_MS = 500;
+    const deadline = Date.now() + VERIFY_TIMEOUT_MS;
 
-    // Verify connection by checking actual status
-    const status = await this.getStatus();
-    const connected = status.connected && status.ssid === ssid;
-
-    return {
-      success: connected,
-      ssid,
-      error: connected ? undefined : 'Failed to verify connection',
-    };
+    while (true) {
+      const status = await this.getStatus();
+      if (status.connected && status.ssid === ssid) {
+        return { success: true, ssid };
+      }
+      if (Date.now() >= deadline) {
+        return {
+          success: false,
+          ssid,
+          error: 'Failed to verify connection',
+        };
+      }
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
   }
 
   /**
