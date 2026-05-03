@@ -67,8 +67,9 @@ test('trace-context: concurrent runs do not bleed', async () => {
   assert.deepEqual(results, [ctxA.trace_id, ctxB.trace_id]);
 });
 
-test('trace-context: getSessionId returns the ALS value', () => {
-  assert.equal(getSessionId(), undefined);
+test('trace-context: getSessionId returns the ALS value (null outside any context)', () => {
+  // Outside any ALS — helper coerces undefined → null for a uniform contract.
+  assert.equal(getSessionId(), null);
   runWithTraceContext(ctxA, () => {
     // ctxA.session_id is null (no session header)
     assert.equal(getSessionId(), null);
@@ -153,10 +154,10 @@ test('establishTraceContext: sampled=false from upstream is preserved', () => {
   assert.equal(ctx.trace_flags, '00');
 });
 
-test('establishTraceContext: Mcp-Session-Id header captured as session_id', () => {
+test('establishTraceContext: X-Caller-Session-Id header captured as session_id', () => {
   const headers = {
     traceparent: VALID_TP,
-    'mcp-session-id': 'sess-123',
+    'x-caller-session-id': 'sess-123',
   };
   const req = { header: (n) => headers[n] };
   const ctx = establishTraceContext(req);
@@ -164,16 +165,36 @@ test('establishTraceContext: Mcp-Session-Id header captured as session_id', () =
   assert.equal(ctx.trace_id, '0af7651916cd43dd8448eb211c80319c');
 });
 
-test('establishTraceContext: missing Mcp-Session-Id → session_id is null', () => {
+test('establishTraceContext: missing X-Caller-Session-Id → session_id is null', () => {
   const req = { header: (n) => (n === 'traceparent' ? VALID_TP : undefined) };
   assert.equal(establishTraceContext(req).session_id, null);
 });
 
-test('establishTraceContext: Mcp-Session-Id alone (no traceparent) still captured', () => {
-  const headers = { 'mcp-session-id': 'sess-only' };
+test('establishTraceContext: X-Caller-Session-Id alone (no traceparent) still captured', () => {
+  const headers = { 'x-caller-session-id': 'sess-only' };
   const req = { header: (n) => headers[n] };
   const ctx = establishTraceContext(req);
   assert.equal(ctx.session_id, 'sess-only');
   // trace_id was minted fresh.
   assert.match(ctx.trace_id, /^[0-9a-f]{32}$/);
+});
+
+test('establishTraceContext: empty / whitespace session header → null', () => {
+  for (const raw of ['', '   ', '\t', '\n']) {
+    const req = { header: (n) => (n === 'x-caller-session-id' ? raw : undefined) };
+    assert.equal(establishTraceContext(req).session_id, null, `raw=${JSON.stringify(raw)}`);
+  }
+});
+
+test('establishTraceContext: trims surrounding whitespace from session header', () => {
+  const req = { header: (n) => (n === 'x-caller-session-id' ? '  sess-trimmed  ' : undefined) };
+  assert.equal(establishTraceContext(req).session_id, 'sess-trimmed');
+});
+
+test('establishTraceContext: oversized session header truncated to 256 chars', () => {
+  const big = 'x'.repeat(1000);
+  const req = { header: (n) => (n === 'x-caller-session-id' ? big : undefined) };
+  const ctx = establishTraceContext(req);
+  assert.equal(ctx.session_id.length, 256);
+  assert.match(ctx.session_id, /^x+$/);
 });

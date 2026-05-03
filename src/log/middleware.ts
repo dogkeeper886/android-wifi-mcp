@@ -46,9 +46,9 @@ export function buildRecordingHandler(
     // newTraceContext so rows from both paths look identical in queries.
     const traceId = getTraceId() ?? newTraceContext().trace_id;
     // Session id comes from the same ALS, populated by the express layer
-    // after the per-session transport has assigned one. null on initialize
-    // (no tool calls fire there anyway) and outside any HTTP context.
-    const sessionId = getSessionId() ?? null;
+    // from the X-Caller-Session-Id request header. null when the client
+    // doesn't send the header or when called outside any HTTP context.
+    const sessionId = getSessionId();
 
     let result: unknown;
     let errorPayload: Record<string, unknown> | undefined;
