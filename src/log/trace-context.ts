@@ -27,6 +27,13 @@ export interface TraceContext {
    * an OTel collector preserves the upstream caller's decision.
    */
   sampled: boolean;
+  /**
+   * MCP transport session id (Phase 2). Populated by the express layer when
+   * a per-session transport is in play. null on initialize requests (where
+   * the session hasn't been assigned yet — but those don't generate
+   * tool_calls rows anyway) and when stateless mode is in use.
+   */
+  session_id: string | null;
 }
 
 const als = new AsyncLocalStorage<TraceContext>();
@@ -43,6 +50,10 @@ export function getTraceId(): string | undefined {
   return als.getStore()?.trace_id;
 }
 
+export function getSessionId(): string | null | undefined {
+  return als.getStore()?.session_id;
+}
+
 /**
  * Build a fresh trace context — used when no traceparent header is present.
  * trace_id is 32 hex chars (W3C format, also accepted by Postgres uuid type).
@@ -57,23 +68,37 @@ export function newTraceContext(): TraceContext {
     parent_span_id: null,
     trace_flags: '01',
     sampled: true,
+    session_id: null,
   };
 }
 
 /**
  * Build the per-request trace context from an incoming HTTP request.
- * Honors a valid `traceparent` header when present, otherwise mints a
- * fresh context. Exported (rather than living inline in src/index.ts) so
- * the express → ALS wiring has a unit-testable seam.
+ *
+ * Honors:
+ *  - W3C `traceparent` for trace_id / parent_span_id / sampled. Missing or
+ *    malformed → mint a fresh trace_id.
+ *  - `Mcp-Session-Id` (Phase 2a) as a client-provided session label. Pure
+ *    tag today — the SDK transport is stateless because its Server is
+ *    single-transport, so server-managed sessions would need one McpServer
+ *    per session (deferred). Whatever the client sends is the logical
+ *    caller identity for query_log grouping.
+ *
+ * Exported (rather than living inline in src/index.ts) so the express → ALS
+ * wiring has a unit-testable seam.
  */
 export function establishTraceContext(req: { header(name: string): string | undefined }): TraceContext {
   const tp = req.header('traceparent');
   const parsed = parseTraceparent(tp);
-  if (!parsed) return newTraceContext();
+  const session_id = req.header('mcp-session-id') ?? null;
+  if (!parsed) {
+    return { ...newTraceContext(), session_id };
+  }
   return {
     trace_id: parsed.trace_id,
     parent_span_id: parsed.parent_id,
     trace_flags: parsed.trace_flags,
     sampled: parsed.sampled,
+    session_id,
   };
 }

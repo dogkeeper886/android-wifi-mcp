@@ -10,6 +10,7 @@ import {
   runWithTraceContext,
   getTraceContext,
   getTraceId,
+  getSessionId,
   newTraceContext,
   establishTraceContext,
 } from '../../dist/log/trace-context.js';
@@ -19,6 +20,7 @@ const ctxA = {
   parent_span_id: '1111111111111111',
   trace_flags: '01',
   sampled: true,
+  session_id: null,
 };
 
 const ctxB = {
@@ -26,6 +28,7 @@ const ctxB = {
   parent_span_id: '2222222222222222',
   trace_flags: '00',
   sampled: false,
+  session_id: 'session-b-uuid',
 };
 
 test('trace-context: getTraceContext returns undefined outside any run', () => {
@@ -64,6 +67,17 @@ test('trace-context: concurrent runs do not bleed', async () => {
   assert.deepEqual(results, [ctxA.trace_id, ctxB.trace_id]);
 });
 
+test('trace-context: getSessionId returns the ALS value', () => {
+  assert.equal(getSessionId(), undefined);
+  runWithTraceContext(ctxA, () => {
+    // ctxA.session_id is null (no session header)
+    assert.equal(getSessionId(), null);
+  });
+  runWithTraceContext(ctxB, () => {
+    assert.equal(getSessionId(), 'session-b-uuid');
+  });
+});
+
 test('trace-context: nested runs shadow then restore', () => {
   runWithTraceContext(ctxA, () => {
     assert.equal(getTraceId(), ctxA.trace_id);
@@ -84,6 +98,10 @@ test('newTraceContext: trace_id is 32 hex chars (W3C format)', () => {
 
 test('newTraceContext: parent_span_id is null on a freshly-minted context', () => {
   assert.equal(newTraceContext().parent_span_id, null);
+});
+
+test('newTraceContext: session_id is null on a freshly-minted context', () => {
+  assert.equal(newTraceContext().session_id, null);
 });
 
 test('newTraceContext: always sampled (server is the trace origin)', () => {
@@ -116,6 +134,7 @@ test('establishTraceContext: missing header → fresh context', () => {
   const ctx = establishTraceContext(req);
   assert.match(ctx.trace_id, /^[0-9a-f]{32}$/);
   assert.equal(ctx.parent_span_id, null);
+  assert.equal(ctx.session_id, null);
 });
 
 test('establishTraceContext: malformed header → fresh context', () => {
@@ -132,4 +151,29 @@ test('establishTraceContext: sampled=false from upstream is preserved', () => {
   const ctx = establishTraceContext(req);
   assert.equal(ctx.sampled, false);
   assert.equal(ctx.trace_flags, '00');
+});
+
+test('establishTraceContext: Mcp-Session-Id header captured as session_id', () => {
+  const headers = {
+    traceparent: VALID_TP,
+    'mcp-session-id': 'sess-123',
+  };
+  const req = { header: (n) => headers[n] };
+  const ctx = establishTraceContext(req);
+  assert.equal(ctx.session_id, 'sess-123');
+  assert.equal(ctx.trace_id, '0af7651916cd43dd8448eb211c80319c');
+});
+
+test('establishTraceContext: missing Mcp-Session-Id → session_id is null', () => {
+  const req = { header: (n) => (n === 'traceparent' ? VALID_TP : undefined) };
+  assert.equal(establishTraceContext(req).session_id, null);
+});
+
+test('establishTraceContext: Mcp-Session-Id alone (no traceparent) still captured', () => {
+  const headers = { 'mcp-session-id': 'sess-only' };
+  const req = { header: (n) => headers[n] };
+  const ctx = establishTraceContext(req);
+  assert.equal(ctx.session_id, 'sess-only');
+  // trace_id was minted fresh.
+  assert.match(ctx.trace_id, /^[0-9a-f]{32}$/);
 });

@@ -45,6 +45,12 @@ const ctxFromHeader = {
   parent_span_id: 'b7ad6b7169203331',
   trace_flags: '01',
   sampled: true,
+  session_id: null,
+};
+
+const ctxWithSession = {
+  ...ctxFromHeader,
+  session_id: 'sess-abc-123',
 };
 
 test('integration: trace_id from ALS flows through installCallRecording → recorder', async () => {
@@ -117,6 +123,35 @@ test('integration: no observer → no attribution even on failure', async () => 
 
   assert.equal(recorded[0].error.source, 'tool_result');
   assert.equal(recorded[0].error.attribution, undefined);
+});
+
+test('integration: session_id from ALS lands on the recorded row (Phase 2)', async () => {
+  const recorded = [];
+  const server = new McpServer({ name: 'test', version: '1.0.0' });
+  server.tool('echo', 'echo', {}, async () => ({ content: [{ type: 'text', text: 'ok' }] }));
+
+  installCallRecording(server, undefined, undefined, async (c) => recorded.push(c));
+
+  await runWithTraceContext(ctxWithSession, () =>
+    dispatchHandler(server)(callRequest('echo'), {})
+  );
+
+  assert.equal(recorded[0].session_id, 'sess-abc-123');
+  // Trace id still flows alongside.
+  assert.equal(recorded[0].trace_id, ctxWithSession.trace_id);
+});
+
+test('integration: missing session_id in ALS → recorded session_id is null', async () => {
+  const recorded = [];
+  const server = new McpServer({ name: 'test', version: '1.0.0' });
+  server.tool('echo', 'echo', {}, async () => ({ content: [{ type: 'text', text: 'ok' }] }));
+
+  installCallRecording(server, undefined, undefined, async (c) => recorded.push(c));
+
+  // Run without any ALS context — middleware should see undefined session_id
+  // and write null (matching tool_calls.session_id which is nullable).
+  await dispatchHandler(server)(callRequest('echo'), {});
+  assert.equal(recorded[0].session_id, null);
 });
 
 test('integration: trace_id and attribution co-exist on a failed call', async () => {

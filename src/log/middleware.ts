@@ -4,7 +4,7 @@ import { recordToolCall, type ToolCallRecord } from '../db/writer.js';
 import { redactArgs } from './redact.js';
 import { attributeFailure, RECENT_EVENTS_LIMIT, type RelatedEvent } from './attribution.js';
 import { logger } from './logger.js';
-import { getTraceId, newTraceContext } from './trace-context.js';
+import { getTraceId, getSessionId, newTraceContext } from './trace-context.js';
 import type { UpstreamProxy } from '../mcp/upstream-proxy.js';
 
 const log = logger.child({ component: 'middleware' });
@@ -45,6 +45,10 @@ export function buildRecordingHandler(
     // request — primarily a unit-test convenience. Format matches
     // newTraceContext so rows from both paths look identical in queries.
     const traceId = getTraceId() ?? newTraceContext().trace_id;
+    // Session id comes from the same ALS, populated by the express layer
+    // after the per-session transport has assigned one. null on initialize
+    // (no tool calls fire there anyway) and outside any HTTP context.
+    const sessionId = getSessionId() ?? null;
 
     let result: unknown;
     let errorPayload: Record<string, unknown> | undefined;
@@ -90,6 +94,7 @@ export function buildRecordingHandler(
 
       void recorder({
         trace_id: traceId,
+        session_id: sessionId,
         tool_name: name,
         surface,
         args,
