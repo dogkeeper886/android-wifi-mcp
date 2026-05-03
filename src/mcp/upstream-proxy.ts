@@ -121,6 +121,15 @@ export class UpstreamProxy {
     return this.toolToUpstream.has(name);
   }
 
+  /**
+   * Returns `proxy:<upstream-name>` for proxied tools, null otherwise.
+   * Used by the recording middleware to label tool_calls.surface.
+   */
+  getSurfaceForTool(name: string): string | null {
+    const upstream = this.toolToUpstream.get(name);
+    return upstream ? `proxy:${upstream}` : null;
+  }
+
   getTools(): Tool[] {
     return Array.from(this.toolDefs.values());
   }

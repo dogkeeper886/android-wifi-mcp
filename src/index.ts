@@ -3,14 +3,20 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { DeviceManager } from './adb/device-manager.js';
 import { createMcpServer } from './server.js';
 import { UpstreamProxy, parseUpstreamConfig } from './mcp/upstream-proxy.js';
+import { logger } from './log/logger.js';
+import { installCallRecording } from './log/middleware.js';
+import { closePool } from './db/pool.js';
+
+const log = logger.child({ component: 'server' });
 
 const deviceManager = new DeviceManager();
 const upstreamProxy = new UpstreamProxy();
 const { server: mcpServer, nativeToolNames } = createMcpServer(deviceManager, upstreamProxy);
 
 const shutdown = async () => {
-  console.log('Shutting down...');
+  log.info('shutting down');
   await upstreamProxy.closeAll().catch(() => {});
+  await closePool();
   process.exit(0);
 };
 
@@ -20,24 +26,23 @@ process.on('SIGINT', shutdown);
 async function initDevice(): Promise<void> {
   try {
     await deviceManager.initialize();
-    console.log('ADB initialized successfully');
+    log.info('adb initialized');
 
     const devices = await deviceManager.listDevices();
     const connectedDevices = devices.filter(d => d.state === 'device');
-    console.log(`Connected devices: ${connectedDevices.length}`);
+    log.info({ count: connectedDevices.length }, 'connected devices');
     for (const device of connectedDevices) {
-      console.log(`  - ${device.serial} (${device.model || 'Unknown model'})`);
+      log.info({ serial: device.serial, model: device.model || 'Unknown' }, 'device');
     }
   } catch (error) {
-    console.error('Warning: ADB initialization failed:', error);
-    console.error('Please ensure Android SDK Platform Tools are installed and in PATH');
+    log.warn({ err: error }, 'adb initialization failed — ensure platform-tools are on PATH');
   }
 }
 
 async function initUpstreamProxy(): Promise<void> {
   const configs = parseUpstreamConfig(process.env.UPSTREAM_MCP);
   if (configs.length === 0) return;
-  console.log(`Connecting ${configs.length} upstream MCP server(s)...`);
+  log.info({ count: configs.length }, 'connecting upstream MCP server(s)');
   await upstreamProxy.connectAll(configs, nativeToolNames);
   upstreamProxy.attach(mcpServer);
 }
@@ -59,7 +64,7 @@ async function start(): Promise<void> {
       await mcpServer.connect(transport);
       await transport.handleRequest(req, res, req.body);
     } catch (error) {
-      console.error('MCP request error:', error);
+      log.error({ err: error }, 'MCP request error');
       if (!res.headersSent) {
         res.status(500).json({ error: 'Internal server error' });
       }
@@ -74,7 +79,7 @@ async function start(): Promise<void> {
       const devices = await deviceManager.listDevices();
       deviceCount = devices.filter(d => d.state === 'device').length;
     } catch {
-      // Ignore errors
+      // ignore
     }
 
     res.json({
@@ -89,6 +94,7 @@ async function start(): Promise<void> {
 
   await initDevice();
   await initUpstreamProxy();
+  installCallRecording(mcpServer, upstreamProxy);
 
   const PORT = process.env.PORT ?? '3000';
   const HOST = process.env.HOST || '0.0.0.0';
@@ -96,13 +102,13 @@ async function start(): Promise<void> {
   const httpServer = app.listen(Number(PORT), HOST, () => {
     const addr = httpServer.address();
     const actualPort = typeof addr === 'object' && addr ? addr.port : PORT;
-    console.log(`android-wifi-mcp server listening on http://${HOST}:${actualPort}`);
-    console.log(`MCP endpoint: http://${HOST}:${actualPort}/mcp`);
-    console.log(`Health check: http://${HOST}:${actualPort}/health`);
+    log.info(`listening on http://${HOST}:${actualPort}`);
+    log.info(`MCP endpoint: http://${HOST}:${actualPort}/mcp`);
+    log.info(`Health: http://${HOST}:${actualPort}/health`);
   });
 }
 
 start().catch((err) => {
-  console.error('Failed to start server:', err);
+  log.fatal({ err }, 'failed to start server');
   process.exit(1);
 });

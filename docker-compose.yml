@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: android-wifi-mcp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mcp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mcp}
+      POSTGRES_DB: ${POSTGRES_DB:-android_wifi_mcp}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mcp} -d ${POSTGRES_DB:-android_wifi_mcp}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

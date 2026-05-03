@@ -358,6 +358,30 @@ Calls `sms_wait_for_otp` with `senderFilter: "VERIFY"` and a 60s timeout. The to
 | `PORT` | 3000 | Server port |
 | `HOST` | 0.0.0.0 | Server bind address |
 | `ADB_PATH` | adb | Path to adb binary |
+| `DATABASE_URL` | _(unset)_ | Postgres URL for structured logging. When unset, logging is disabled and the server runs unchanged. See "Structured logging" below. |
+| `LOG_LEVEL` | info | pino log level (`trace`, `debug`, `info`, `warn`, `error`, `fatal`) |
+| `LOG_DEST` | stderr | App log destination — `stderr` or a file path |
+
+## Structured logging (optional, Phase 0b)
+
+The server can record every tool call to a Postgres database for post-mortem queries (issue #51). This is **opt-in**: set `DATABASE_URL` and the recording layer activates; leave it unset and the server runs as before.
+
+```bash
+# Bring up Postgres (Docker Compose) and apply migrations
+make up
+make migrate
+
+# Run the server with logging enabled
+DATABASE_URL=postgres://mcp:mcp@localhost:5433/android_wifi_mcp npm start
+
+# Inspect rows
+make psql
+# > SELECT tool_name, surface, duration_ms FROM tool_calls ORDER BY started_at DESC LIMIT 10;
+```
+
+`tool_calls` captures each call's args/result/error and `duration_ms`; `device_events` and `sessions` are placeholders populated in later phases (built-in observer, session routing). Schema lives under `migrations/`.
+
+**Sensitive args are redacted before INSERT.** The middleware replaces values for these keys (case-insensitive) with `***`: `password`, `privateKey`, `privateKeyPassword`, `caCertificate`, `clientCertificate`, `certificate`. Recursion handles nested objects and arrays. The list lives in `src/log/redact.ts` — add to it if you introduce a new tool that takes a secret-bearing arg.
 
 ## Troubleshooting
 
