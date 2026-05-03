@@ -100,6 +100,8 @@ cd android-wifi-mcp
 npm install
 npm run build
 npm start             # HTTP transport on http://localhost:3000
+npm run stop          # Send SIGTERM to whatever is listening on $PORT (default 3000)
+npm restart           # stop + start; use this after `npm run build` to pick up code changes
 ```
 
 The server speaks **Streamable HTTP** (the MCP-spec transport). One process serves all connected MCP clients.
