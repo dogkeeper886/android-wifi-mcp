@@ -13,14 +13,16 @@ const stream =
 // `mixin` runs on every log line and returns extra fields to merge.
 // We use it to inject the active trace context (set by the express layer
 // via runWithTraceContext) so any log emitted while a tool call is
-// in-flight is automatically tagged.
+// in-flight is automatically tagged. Only `trace_id` is emitted —
+// `sampled` is informational and never queried, so dropping it keeps
+// log lines tighter without losing any join key for query_log.
 export const logger: Logger = pino(
   {
     level,
     mixin: () => {
       const ctx = getTraceContext();
       if (!ctx) return {};
-      return { trace_id: ctx.trace_id, sampled: ctx.sampled };
+      return { trace_id: ctx.trace_id };
     },
   },
   stream

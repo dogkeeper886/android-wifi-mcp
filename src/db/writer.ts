@@ -1,7 +1,29 @@
 import { getPool } from './pool.js';
 import { logger } from '../log/logger.js';
+import type { Attribution } from '../log/attribution.js';
 
 const log = logger.child({ component: 'db.writer' });
+
+/**
+ * Shape of the `tool_calls.error` JSONB column. Two variants — one for
+ * thrown exceptions, one for tools that returned `{ isError: true, ... }`
+ * — both optionally carrying a Phase 4 attribution. Documented here so
+ * Phase 5's query_log and any downstream consumer have a typed reference.
+ */
+export type ToolCallErrorThrown = {
+  source: 'thrown';
+  message: string;
+  name: string;
+  attribution?: Attribution;
+};
+
+export type ToolCallErrorToolResult = {
+  source: 'tool_result';
+  content: unknown;
+  attribution?: Attribution;
+};
+
+export type ToolCallError = ToolCallErrorThrown | ToolCallErrorToolResult;
 
 export interface ToolCallRecord {
   call_id?: string;

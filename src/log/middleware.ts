@@ -1,11 +1,10 @@
-import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { recordToolCall, type ToolCallRecord } from '../db/writer.js';
 import { redactArgs } from './redact.js';
-import { attributeFailure, type RelatedEvent } from './attribution.js';
+import { attributeFailure, RECENT_EVENTS_LIMIT, type RelatedEvent } from './attribution.js';
 import { logger } from './logger.js';
-import { getTraceId } from './trace-context.js';
+import { getTraceId, newTraceContext } from './trace-context.js';
 import type { UpstreamProxy } from '../mcp/upstream-proxy.js';
 
 const log = logger.child({ component: 'middleware' });
@@ -42,9 +41,10 @@ export function buildRecordingHandler(
     const startedAt = new Date();
     // Trace id comes from the ALS-stored context (set by the express layer
     // from incoming traceparent or freshly generated). Falls back to a
-    // randomUUID only when called outside any HTTP request — primarily a
-    // unit-test convenience.
-    const traceId = getTraceId() ?? randomUUID();
+    // freshly-minted W3C-format trace id when called outside any HTTP
+    // request — primarily a unit-test convenience. Format matches
+    // newTraceContext so rows from both paths look identical in queries.
+    const traceId = getTraceId() ?? newTraceContext().trace_id;
 
     let result: unknown;
     let errorPayload: Record<string, unknown> | undefined;
@@ -80,7 +80,7 @@ export function buildRecordingHandler(
       // genuinely related event in the failure window; tool-internal errors
       // (bad args, timeouts, etc.) leave the column unset.
       if (errorPayload && observer) {
-        const events = observer.getRecent(32);
+        const events = observer.getRecent(RECENT_EVENTS_LIMIT);
         const attribution = attributeFailure(
           { started_at: startedAt, completed_at: completedAt },
           events
@@ -114,7 +114,8 @@ export function buildRecordingHandler(
 export function installCallRecording(
   mcpServer: McpServer,
   proxy?: UpstreamProxy,
-  observer?: RecentEventsSource
+  observer?: RecentEventsSource,
+  recorder: Recorder = recordToolCall
 ): void {
   const server = mcpServer.server;
   const handlers = (server as any)._requestHandlers as Map<string, ToolsCallHandler>;
@@ -126,7 +127,7 @@ export function installCallRecording(
   }
   server.setRequestHandler(
     CallToolRequestSchema,
-    buildRecordingHandler(original, proxy, recordToolCall, observer)
+    buildRecordingHandler(original, proxy, recorder, observer)
   );
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

@@ -33,6 +33,26 @@ test('attribution: event before window → null', () => {
   assert.equal(attributeFailure(call, events), null);
 });
 
+test('attribution: event exactly at the pre-window edge classifies (inclusive)', () => {
+  // PRE_WINDOW_MS is 5000; spec is `>= startMs && <= endMs` (inclusive).
+  const tsExactEdge = new Date(tsCallStart.getTime() - 5000);
+  const events = [
+    { serial: 'A', prev_state: 'device', new_state: null, ts: tsExactEdge },
+  ];
+  assert.equal(
+    attributeFailure(call, events)?.classification,
+    'physical_disconnect'
+  );
+});
+
+test('attribution: 1ms past the pre-window edge → null', () => {
+  const tsJustOutside = new Date(tsCallStart.getTime() - 5001);
+  const events = [
+    { serial: 'A', prev_state: 'device', new_state: null, ts: tsJustOutside },
+  ];
+  assert.equal(attributeFailure(call, events), null);
+});
+
 test('attribution: event in pre-window classifies', () => {
   const events = [
     { serial: 'A', prev_state: 'device', new_state: null, ts: tsInWindow },
