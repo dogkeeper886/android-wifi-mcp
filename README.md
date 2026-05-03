@@ -381,6 +381,8 @@ make psql
 
 `tool_calls` captures each call's args/result/error and `duration_ms`; `device_events` and `sessions` are placeholders populated in later phases (built-in observer, session routing). Schema lives under `migrations/`.
 
+**Sensitive args are redacted before INSERT.** The middleware replaces values for these keys (case-insensitive) with `***`: `password`, `privateKey`, `privateKeyPassword`, `caCertificate`, `clientCertificate`, `certificate`. Recursion handles nested objects and arrays. The list lives in `src/log/redact.ts` — add to it if you introduce a new tool that takes a secret-bearing arg.
+
 ## Troubleshooting
 
 ### "No devices connected"

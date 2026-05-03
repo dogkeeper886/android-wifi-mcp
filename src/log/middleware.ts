@@ -1,11 +1,75 @@
 import { randomUUID } from 'node:crypto';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { recordToolCall } from '../db/writer.js';
+import { recordToolCall, type ToolCallRecord } from '../db/writer.js';
+import { redactArgs } from './redact.js';
 import { logger } from './logger.js';
 import type { UpstreamProxy } from '../mcp/upstream-proxy.js';
 
 const log = logger.child({ component: 'middleware' });
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+type ToolsCallHandler = (request: any, extra: any) => Promise<any>;
+type Recorder = (call: ToolCallRecord) => Promise<void>;
+
+/**
+ * Build a handler that wraps `original` with the recording layer. Exported so
+ * unit tests can drive the wrapping in isolation, without standing up an
+ * McpServer.
+ */
+export function buildRecordingHandler(
+  original: ToolsCallHandler,
+  proxy?: Pick<UpstreamProxy, 'getSurfaceForTool'>,
+  recorder: Recorder = recordToolCall
+): ToolsCallHandler {
+  return async (request, extra) => {
+    const name = request.params.name;
+    const args = redactArgs(request.params.arguments ?? null);
+    const surface = proxy?.getSurfaceForTool(name) ?? 'native';
+    const startedAt = new Date();
+    const traceId = randomUUID();
+
+    let result: unknown;
+    let errorPayload: unknown;
+    try {
+      result = await original(request, extra);
+      // Tools signal failure two ways: throw, or return { isError: true, ... }.
+      // The SDK passes the latter through as a normal JSON-RPC result, so we
+      // have to inspect the shape here — otherwise the error column stays null
+      // for tool-level failures and Phase 4's diagnosis queries miss them.
+      if (
+        typeof result === 'object' &&
+        result !== null &&
+        (result as { isError?: boolean }).isError === true
+      ) {
+        errorPayload = {
+          source: 'tool_result',
+          content: (result as { content?: unknown }).content,
+        };
+      }
+      return result;
+    } catch (err) {
+      errorPayload = {
+        source: 'thrown',
+        message: (err as Error).message,
+        name: (err as Error).name,
+      };
+      throw err;
+    } finally {
+      const completedAt = new Date();
+      void recorder({
+        trace_id: traceId,
+        tool_name: name,
+        surface,
+        args,
+        result: errorPayload ? undefined : result,
+        error: errorPayload,
+        started_at: startedAt,
+        completed_at: completedAt,
+      }).catch((err) => log.warn({ err }, 'recorder threw unexpectedly'));
+    }
+  };
+}
 
 /**
  * Wrap the existing tools/call handler with a recording layer that writes
@@ -20,50 +84,14 @@ export function installCallRecording(
   mcpServer: McpServer,
   proxy?: UpstreamProxy
 ): void {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
   const server = mcpServer.server;
-  const handlers = (server as any)._requestHandlers as Map<
-    string,
-    (request: any, extra: any) => Promise<any>
-  >;
+  const handlers = (server as any)._requestHandlers as Map<string, ToolsCallHandler>;
   const original = handlers.get('tools/call');
   if (!original) {
     throw new Error(
       'McpServer has no tools/call handler — installCallRecording must run after createMcpServer'
     );
   }
-
-  server.setRequestHandler(CallToolRequestSchema, async (request, extra) => {
-    const name = request.params.name;
-    const args = request.params.arguments ?? null;
-    const surface = proxy?.getSurfaceForTool(name) ?? 'native';
-    const startedAt = new Date();
-    const traceId = randomUUID();
-
-    let result: unknown;
-    let errorPayload: unknown;
-    try {
-      result = await original(request, extra);
-      return result as any;
-    } catch (err) {
-      errorPayload = {
-        message: (err as Error).message,
-        name: (err as Error).name,
-      };
-      throw err;
-    } finally {
-      const completedAt = new Date();
-      void recordToolCall({
-        trace_id: traceId,
-        tool_name: name,
-        surface,
-        args,
-        result: errorPayload ? undefined : result,
-        error: errorPayload,
-        started_at: startedAt,
-        completed_at: completedAt,
-      }).catch((err) => log.warn({ err }, 'recordToolCall threw unexpectedly'));
-    }
-  });
-  /* eslint-enable @typescript-eslint/no-explicit-any */
+  server.setRequestHandler(CallToolRequestSchema, buildRecordingHandler(original, proxy));
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
