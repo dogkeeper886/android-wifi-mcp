@@ -58,9 +58,15 @@ async function start(): Promise<void> {
 
   app.post('/mcp', async (req, res) => {
     // Establish per-request trace context: honor an incoming W3C traceparent
-    // when present, otherwise mint a fresh one. Everything downstream
-    // (middleware → tool_calls.trace_id, pino mixin → log lines) reads it
-    // from AsyncLocalStorage.
+    // when present, otherwise mint a fresh one. Phase 2a: also honor an
+    // incoming `X-Caller-Session-Id` header as a client-provided session
+    // label (one tag per logical caller — multiple Claude Code windows,
+    // separate QA harnesses, etc). Custom header avoids collision with the
+    // MCP spec's `Mcp-Session-Id`, which is server-issued in stateful mode.
+    // We stay stateless because the SDK's Server class is
+    // single-transport-per-instance, so true server-managed sessions would
+    // need one McpServer per session — a heavier refactor that's deferred
+    // until per-session state isolation is actually needed.
     const ctx = establishTraceContext(req);
 
     await runWithTraceContext(ctx, async () => {
