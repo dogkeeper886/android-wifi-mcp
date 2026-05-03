@@ -10,6 +10,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
+    "stop": "lsof -ti:${PORT:-3000} | xargs -r kill -TERM",
+    "restart": "npm run stop && sleep 0.5 && npm start",
     "dev": "tsc --watch",
     "test:unit": "node --test 'tests/unit/**/*.test.mjs'",
     "tools:count": "echo \"Native tools registered in src/server.ts: $(grep -c 'mcpServer\\.tool(' src/server.ts)\""
