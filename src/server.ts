@@ -91,7 +91,7 @@ export function createMcpServer(
 
   mcpServer.tool(
     'query_log',
-    'Query the structured-logging tables (tool_calls + device_events) without raw SQL — server validates filters and parameterizes everything. Use this for post-mortems: pull every call for a trace_id, filter by tool_name or surface, narrow to errors_only, or pivot on a Phase 4 attribution classification (physical_disconnect, rsa_revoked, adb_server_confusion, unknown_disconnect). Set include_events together with trace_id to fetch the matched trace\'s device transitions alongside its tool calls. Returns a note when DATABASE_URL is unset.',
+    'Query the structured-logging tables (tool_calls + device_events) without raw SQL — server validates filters and parameterizes everything. Use this for post-mortems: pull every call for a trace_id, filter by tool_name or surface, narrow to errors_only, or pivot on a Phase 4 attribution classification (physical_disconnect, rsa_revoked, adb_server_confusion, unknown_disconnect). Returns a note when DATABASE_URL is unset.',
     {
       trace_id: z.string().optional().describe('Filter to a single trace_id (W3C 32-hex or UUID-dashed)'),
       session_id: z.string().optional().describe('Filter to a single session_id (Phase 2 — currently always null in tool_calls)'),
@@ -103,7 +103,7 @@ export function createMcpServer(
       classification: z.enum(KNOWN_CLASSIFICATIONS).optional().describe('Filter by Phase 4 attribution.classification'),
       limit: z.number().int().optional().default(50).describe('Max rows to return (capped at 1000)'),
       offset: z.number().int().optional().default(0).describe('Pagination offset'),
-      include_events: z.boolean().optional().default(false).describe('When set with trace_id, also fetch device_events sharing that trace_id'),
+      include_events: z.boolean().optional().default(false).describe('When set with trace_id, fetch device_events sharing that trace_id. NOTE: today this returns []; the device observer emits transitions outside any tool-call ALS so device_events.trace_id is always null. Phase 4b will populate it via udev/serial+time correlation. Use device_event_log for the in-memory ring in the meantime.'),
     },
     async (filters) => {
       const result = await runQuery(filters);

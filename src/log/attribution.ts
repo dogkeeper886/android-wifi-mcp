@@ -11,11 +11,18 @@
  * Pure function — exported for unit testing.
  */
 
-export type Classification =
-  | 'physical_disconnect'   // device → (gone), prior state was 'device'
-  | 'rsa_revoked'           // → 'unauthorized', or unauthorized → (gone)
-  | 'adb_server_confusion'  // → 'offline', or offline → (gone)
-  | 'unknown_disconnect';   // failure inside window but transition shape doesn't match
+/**
+ * The runtime list lives next to the type so a single source of truth covers
+ * both compile-time narrowing and runtime enum checks (`query_log` filter,
+ * Zod schema in src/server.ts). Add new entries here only.
+ */
+export const KNOWN_CLASSIFICATIONS = [
+  'physical_disconnect',    // device → (gone), prior state was 'device'
+  'rsa_revoked',            // → 'unauthorized', or unauthorized → (gone)
+  'adb_server_confusion',   // → 'offline', or offline → (gone)
+  'unknown_disconnect',     // failure inside window but transition shape doesn't match
+] as const;
+export type Classification = (typeof KNOWN_CLASSIFICATIONS)[number];
 
 export interface RelatedEvent {
   serial: string;

@@ -8,16 +8,10 @@
 
 import { getPool } from '../db/pool.js';
 import { logger } from './logger.js';
+import { KNOWN_CLASSIFICATIONS, type Classification } from './attribution.js';
 
 const log = logger.child({ component: 'query' });
 
-const KNOWN_CLASSIFICATIONS = [
-  'physical_disconnect',
-  'rsa_revoked',
-  'adb_server_confusion',
-  'unknown_disconnect',
-] as const;
-export type Classification = (typeof KNOWN_CLASSIFICATIONS)[number];
 const KNOWN_CLASSIFICATION_SET: ReadonlySet<string> = new Set(KNOWN_CLASSIFICATIONS);
 
 const MAX_LIMIT = 1000;
@@ -79,6 +73,18 @@ export function buildQuery(filters: QueryFilters): BuiltQuery {
   const limit = clampLimit(filters.limit);
   const offset = Math.max(0, Math.floor(filters.offset ?? 0));
 
+  // count query uses just the WHERE-clause params; capture before extending
+  // for the calls query so they don't share the LIMIT/OFFSET tail.
+  const countSql = `SELECT count(*)::int AS total FROM tool_calls ${whereSql}`;
+  const countParams = [...params];
+
+  // LIMIT/OFFSET are parameterized too — the values are int-clamped here so
+  // it's safe either way, but parameterizing keeps the rule "every value goes
+  // through pg's escape" uniform across the builder.
+  const limitIdx = params.length + 1;
+  const offsetIdx = params.length + 2;
+  const callsParams = [...params, limit, offset];
+
   // Newest-first so the "what happened recently" common case is cheap.
   const callsSql = `
     SELECT call_id, trace_id, parent_call_id, session_id, connection_id,
@@ -87,14 +93,8 @@ export function buildQuery(filters: QueryFilters): BuiltQuery {
     FROM tool_calls
     ${whereSql}
     ORDER BY started_at DESC
-    LIMIT ${limit} OFFSET ${offset}
+    LIMIT $${limitIdx} OFFSET $${offsetIdx}
   `;
-  const callsParams = [...params];
-
-  // Separate count query — running it on the same filters is cheap on a small
-  // table and lets pagination know when there's more.
-  const countSql = `SELECT count(*)::int AS total FROM tool_calls ${whereSql}`;
-  const countParams = [...params];
 
   // Events: only run when include_events is set AND a trace-scoping filter is
   // present, otherwise we'd return events for the entire DB.
@@ -212,4 +212,4 @@ export async function runQuery(filters: QueryFilters): Promise<QueryResult> {
   }
 }
 
-export { KNOWN_CLASSIFICATIONS };
+export { KNOWN_CLASSIFICATIONS, type Classification };
