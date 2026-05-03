@@ -181,7 +181,7 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 
 ## Available Tools
 
-**30 native tools** in 9 categories below. With the optional `@playwright/mcp` upstream enabled (see [Proxying upstream MCPs](#proxying-upstream-mcps)), an additional **21 `browser_*` tools** are surfaced through the same endpoint for **51 total**.
+**31 native tools** in 9 categories below. With the optional `@playwright/mcp` upstream enabled (see [Proxying upstream MCPs](#proxying-upstream-mcps)), an additional **21 `browser_*` tools** are surfaced through the same endpoint for **52 total**.
 
 ### Device Management
 
@@ -190,6 +190,7 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 | `device_list` | List all connected Android devices |
 | `device_select` | Select a device for operations |
 | `device_info` | Get detailed device information |
+| `device_event_log` | Recent device-attach/detach/state-change transitions from the built-in `adb track-devices` listener |
 | `device_screenshot` | Capture a PNG (returns base64 or saves to a host path) |
 
 ### Device Settings (system / secure / global)
@@ -459,7 +460,7 @@ Upstreams start eagerly at server boot. On `SIGINT` / `SIGTERM` the server close
 
 ### Verified composition
 
-The default `UPSTREAM_MCP` in `.env.example` is `@playwright/mcp` — running our server with that set yields **51 total tools** (30 native + 21 from `@playwright/mcp`), all reachable from one MCP endpoint. See `cicd/tests/testcases/proxy/TC-PROXY-002.yml` for the end-to-end smoke test.
+The default `UPSTREAM_MCP` in `.env.example` is `@playwright/mcp` — running our server with that set yields **52 total tools** (31 native + 21 from `@playwright/mcp`), all reachable from one MCP endpoint. See `cicd/tests/testcases/proxy/TC-PROXY-002.yml` for the end-to-end smoke test.
 
 ## Testing
 

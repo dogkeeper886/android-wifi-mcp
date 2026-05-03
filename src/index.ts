@@ -1,6 +1,7 @@
 import express from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { DeviceManager } from './adb/device-manager.js';
+import { DeviceObserver } from './adb/device-observer.js';
 import { createMcpServer } from './server.js';
 import { UpstreamProxy, parseUpstreamConfig } from './mcp/upstream-proxy.js';
 import { logger } from './log/logger.js';
@@ -12,11 +13,14 @@ import { closePool } from './db/pool.js';
 const log = logger.child({ component: 'server' });
 
 const deviceManager = new DeviceManager();
+const deviceObserver = new DeviceObserver(process.env.ADB_PATH);
+deviceManager.setObserver(deviceObserver);
 const upstreamProxy = new UpstreamProxy();
 const { server: mcpServer, nativeToolNames } = createMcpServer(deviceManager, upstreamProxy);
 
 const shutdown = async () => {
   log.info('shutting down');
+  await deviceObserver.stop().catch(() => {});
   await upstreamProxy.closeAll().catch(() => {});
   await closePool();
   process.exit(0);
@@ -112,6 +116,7 @@ async function start(): Promise<void> {
   });
 
   await initDevice();
+  deviceObserver.start();
   await initUpstreamProxy();
   installCallRecording(mcpServer, upstreamProxy);
 
