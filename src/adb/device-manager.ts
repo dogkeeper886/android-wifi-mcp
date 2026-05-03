@@ -6,6 +6,19 @@ import { NotificationCommands } from './notifications-commands.js';
 import { SettingsCommands } from './settings-commands.js';
 import { FileCommands } from './file-commands.js';
 import { Device, DeviceInfo } from '../types.js';
+import type { DeviceObserver } from './device-observer.js';
+
+function formatElapsed(ms: number): string {
+  if (ms < 0) return 'just now';
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.round(h / 24);
+  return `${d}d`;
+}
 
 /**
  * Manages connected Android devices and provides unified access
@@ -20,6 +33,7 @@ export class DeviceManager {
   private settings: SettingsCommands;
   private files: FileCommands;
   private devices: Map<string, DeviceInfo> = new Map();
+  private observer: DeviceObserver | null = null;
 
   constructor(adbPath?: string) {
     this.adb = new AdbClient(adbPath);
@@ -29,6 +43,19 @@ export class DeviceManager {
     this.notifications = new NotificationCommands(this.adb);
     this.settings = new SettingsCommands(this.adb);
     this.files = new FileCommands(this.adb);
+  }
+
+  /**
+   * Wire in the device observer so ensureDeviceSelected() can enrich its
+   * "no device" error with last-seen state. Optional — DeviceManager runs
+   * without it (just throws the plain message).
+   */
+  setObserver(observer: DeviceObserver): void {
+    this.observer = observer;
+  }
+
+  getObserver(): DeviceObserver | null {
+    return this.observer;
   }
 
   /**
@@ -183,7 +210,7 @@ export class DeviceManager {
     const connectedDevices = devices.filter(d => d.state === 'device');
 
     if (connectedDevices.length === 0) {
-      throw new Error('No Android devices connected. Please connect a device with USB debugging enabled.');
+      throw new Error(this.formatNoDeviceError());
     }
 
     if (connectedDevices.length > 1) {
@@ -196,6 +223,35 @@ export class DeviceManager {
     // Auto-select the only connected device
     this.adb.selectDevice(connectedDevices[0].serial);
     return connectedDevices[0].serial;
+  }
+
+  /**
+   * Build the "no device" error message, enriching with last-seen state from
+   * the observer when available. Goal is to let an agent decide between
+   * "ask user to replug", "restart emulator", and "re-accept RSA prompt"
+   * without falling back to host-side probing — the operational pain
+   * documented in #49.
+   */
+  private formatNoDeviceError(): string {
+    const base = 'No Android devices connected. Please connect a device with USB debugging enabled.';
+    if (!this.observer) return base;
+
+    const detach = this.observer.getMostRecentDetach();
+    if (!detach) return base;
+
+    const elapsedMs = Date.now() - detach.ts.getTime();
+    const elapsed = formatElapsed(elapsedMs);
+    const fromState = detach.prev_state ?? 'unknown';
+
+    return (
+      `${base} ` +
+      `Last seen: ${detach.serial} left '${fromState}' state ${elapsed} ago ` +
+      `(at ${detach.ts.toISOString()}). ` +
+      `Hint: depending on the prior state — 'device' suggests physical disconnect, ` +
+      `USB autosuspend, or device sleep; 'unauthorized' suggests RSA revocation; ` +
+      `'offline' suggests adb-server confusion or emulator death. ` +
+      `Use device_event_log for the full transition history.`
+    );
   }
 
   /**

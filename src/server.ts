@@ -89,6 +89,28 @@ export function createMcpServer(
   );
 
   mcpServer.tool(
+    'device_event_log',
+    'Recent device-attach/detach/state-change transitions observed by the built-in `adb track-devices` listener. Useful when a tool just failed with "No Android devices connected" — the log answers when the device left and what state it was in. The observer also writes each transition to the `device_events` table when DATABASE_URL is set.',
+    {
+      limit: z.number().optional().default(32).describe('Max transitions to return (newest first, default 32)'),
+      serial: z.string().optional().describe('Filter to a specific serial'),
+    },
+    async ({ limit, serial }) => {
+      const observer = deviceManager.getObserver();
+      if (!observer) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ events: [], note: 'Device observer is not attached to this server' }, null, 2) }],
+        };
+      }
+      let events = observer.getRecent(limit);
+      if (serial) events = events.filter(e => e.serial === serial);
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ count: events.length, events }, null, 2) }],
+      };
+    }
+  );
+
+  mcpServer.tool(
     'device_info',
     'Get detailed information about the selected Android device',
     {},

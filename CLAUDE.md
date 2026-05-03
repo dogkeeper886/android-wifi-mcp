@@ -19,13 +19,14 @@ Claude Code ─stdio─► shim ─HTTP─►      │
 ```
 
 - **Server entrypoint:** `src/index.ts` boots a long-running HTTP server (Streamable HTTP transport). Stdio support was removed in #51 Phase 0a — Claude Code clients connect via the bundled stdio shim (`bin/android-wifi-shim.mjs`).
-- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 30 native tools.
+- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 31 native tools.
 - **Proxy:** `src/mcp/upstream-proxy.ts` spawns upstream MCP subprocesses on startup and merges their tools into one tools/list. Configured via `UPSTREAM_MCP` env var.
 - **ADB layer:** `src/adb/` — `adb-client.ts` (process wrapper), `device-manager.ts` (multi-device), then per-domain wrappers: `wifi-commands.ts`, `screenshot-commands.ts`, `sms-commands.ts`, `enterprise-wifi.ts`, `settings-commands.ts`, `file-commands.ts`.
 - **Companion app:** `companion-app/` — Kotlin Android app that handles 802.1X enterprise WiFi (the only flow that needs an on-device daemon today).
 - **Network helpers:** `src/network/network-check.ts`.
 - **Structured logging (opt-in, Phase 0b of #51):** `src/db/{pool,writer}.ts` + `src/log/{logger,middleware}.ts`. `installCallRecording()` wraps the final `tools/call` handler and writes a row per call to `tool_calls`. Pool is lazy: when `DATABASE_URL` is unset, recording is a silent no-op. Postgres lives in `docker-compose.yml` (`make up`), migrations in `migrations/` via `node-pg-migrate` (`make migrate`). pino emits app logs to stderr (or `LOG_DEST=path`).
 - **Trace propagation (Phase 1 of #51):** `src/log/{traceparent,trace-context}.ts`. The express layer parses incoming W3C `traceparent` headers (or generates a fresh trace context) and runs `transport.handleRequest` inside an `AsyncLocalStorage`. The recording middleware reads `trace_id` from the ALS; the pino logger has a `mixin` that does the same, so every log line emitted while a tool call is in-flight is auto-tagged. Outgoing propagation to upstream stdio MCPs is deferred (no header concept in stdio JSON-RPC).
+- **Device observer (Phase 3a of #51):** `src/adb/device-observer.ts` spawns `adb track-devices` as a subprocess and parses the length-prefixed transition stream. Every state change → row in `device_events` (when `DATABASE_URL` is set) + entry in an in-memory ring buffer. `device_event_log` tool exposes the ring; `DeviceManager.ensureDeviceSelected()` enriches the "no device" error with the most recent detach so the agent can decide replug/restart/re-trust. Subprocess death is handled with exponential backoff. Transitions emit outside any tool-call ALS, so `device_events.trace_id` stays null (correlation in Phase 4 happens via serial + time).
 - **Test framework:** `cicd/tests/` — custom YAML-driven runner. See "Tests" below.
 
 ## Transport — HTTP only, with shim for Claude Code
