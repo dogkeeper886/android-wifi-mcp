@@ -5,6 +5,8 @@ import { createMcpServer } from './server.js';
 import { UpstreamProxy, parseUpstreamConfig } from './mcp/upstream-proxy.js';
 import { logger } from './log/logger.js';
 import { installCallRecording } from './log/middleware.js';
+import { parseTraceparent } from './log/traceparent.js';
+import { runWithTraceContext, newTraceContext } from './log/trace-context.js';
 import { closePool } from './db/pool.js';
 
 const log = logger.child({ component: 'server' });
@@ -52,23 +54,40 @@ async function start(): Promise<void> {
   app.use(express.json());
 
   app.post('/mcp', async (req, res) => {
-    try {
-      const transport = new StreamableHTTPServerTransport({
-        sessionIdGenerator: undefined,
-      });
+    // Establish per-request trace context: honor an incoming W3C traceparent
+    // when present, otherwise mint a fresh one. Everything downstream
+    // (middleware → tool_calls.trace_id, pino mixin → log lines) reads it
+    // from AsyncLocalStorage.
+    const tp = req.header('traceparent');
+    const parsed = parseTraceparent(tp);
+    const ctx = parsed
+      ? {
+          trace_id: parsed.trace_id,
+          parent_id: parsed.parent_id,
+          trace_flags: parsed.trace_flags,
+          sampled: parsed.sampled,
+        }
+      : newTraceContext();
 
-      res.on('close', () => {
-        transport.close();
-      });
+    await runWithTraceContext(ctx, async () => {
+      try {
+        const transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: undefined,
+        });
 
-      await mcpServer.connect(transport);
-      await transport.handleRequest(req, res, req.body);
-    } catch (error) {
-      log.error({ err: error }, 'MCP request error');
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Internal server error' });
+        res.on('close', () => {
+          transport.close();
+        });
+
+        await mcpServer.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      } catch (error) {
+        log.error({ err: error }, 'MCP request error');
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Internal server error' });
+        }
       }
-    }
+    });
   });
 
   app.get('/health', async (_req, res) => {

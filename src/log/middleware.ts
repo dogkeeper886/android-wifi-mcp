@@ -4,6 +4,7 @@ import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { recordToolCall, type ToolCallRecord } from '../db/writer.js';
 import { redactArgs } from './redact.js';
 import { logger } from './logger.js';
+import { getTraceId } from './trace-context.js';
 import type { UpstreamProxy } from '../mcp/upstream-proxy.js';
 
 const log = logger.child({ component: 'middleware' });
@@ -27,7 +28,11 @@ export function buildRecordingHandler(
     const args = redactArgs(request.params.arguments ?? null);
     const surface = proxy?.getSurfaceForTool(name) ?? 'native';
     const startedAt = new Date();
-    const traceId = randomUUID();
+    // Trace id comes from the ALS-stored context (set by the express layer
+    // from incoming traceparent or freshly generated). Falls back to a
+    // randomUUID only when called outside any HTTP request — primarily a
+    // unit-test convenience.
+    const traceId = getTraceId() ?? randomUUID();
 
     let result: unknown;
     let errorPayload: unknown;
