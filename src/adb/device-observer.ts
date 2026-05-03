@@ -194,6 +194,14 @@ export class DeviceObserver {
   }
 
   private spawn(): void {
+    // Guard against two races:
+    //   1. `stop()` flips `stopping=true` and clearTimeout's the restart timer,
+    //      but a timer that has already fired sits queued in the event loop and
+    //      its callback would still call us.
+    //   2. `start()` is called while a restart is pending (proc is null because
+    //      the subprocess died); the pending timer would then race a second spawn.
+    // Re-checking here closes both.
+    if (this.stopping || this.proc) return;
     log.info({ adb: this.adbPath }, 'starting device observer');
     const proc = spawn(this.adbPath, ['track-devices'], {
       stdio: ['ignore', 'pipe', 'pipe'],
