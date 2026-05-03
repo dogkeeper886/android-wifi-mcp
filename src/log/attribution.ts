@@ -40,9 +40,18 @@ export interface Attribution {
 const PRE_WINDOW_MS = 5000;
 const POST_WINDOW_MS = 1000;
 
+/**
+ * How many recent events the middleware should pull from the observer
+ * ring before passing them to the classifier. Co-located with the time
+ * window so high-churn scenarios (e.g. an emulator flapping at ~100ms
+ * cadence) don't silently fall outside the count. 64 matches the
+ * default ring capacity in DeviceObserver — exhaustive by construction.
+ */
+export const RECENT_EVENTS_LIMIT = 64;
+
 interface CallWindow {
   started_at: Date;
-  completed_at: Date | null;
+  completed_at: Date;
 }
 
 /**
@@ -59,7 +68,7 @@ export function attributeFailure(
   if (events.length === 0) return null;
 
   const startMs = call.started_at.getTime() - PRE_WINDOW_MS;
-  const endMs = (call.completed_at ?? new Date()).getTime() + POST_WINDOW_MS;
+  const endMs = call.completed_at.getTime() + POST_WINDOW_MS;
 
   // Events are newest-first as returned by DeviceObserver.getRecent.
   const related = events.find((e) => {
