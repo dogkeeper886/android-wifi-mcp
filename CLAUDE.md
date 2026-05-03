@@ -25,6 +25,7 @@ Claude Code ─stdio─► shim ─HTTP─►      │
 - **Companion app:** `companion-app/` — Kotlin Android app that handles 802.1X enterprise WiFi (the only flow that needs an on-device daemon today).
 - **Network helpers:** `src/network/network-check.ts`.
 - **Structured logging (opt-in, Phase 0b of #51):** `src/db/{pool,writer}.ts` + `src/log/{logger,middleware}.ts`. `installCallRecording()` wraps the final `tools/call` handler and writes a row per call to `tool_calls`. Pool is lazy: when `DATABASE_URL` is unset, recording is a silent no-op. Postgres lives in `docker-compose.yml` (`make up`), migrations in `migrations/` via `node-pg-migrate` (`make migrate`). pino emits app logs to stderr (or `LOG_DEST=path`).
+- **Trace propagation (Phase 1 of #51):** `src/log/{traceparent,trace-context}.ts`. The express layer parses incoming W3C `traceparent` headers (or generates a fresh trace context) and runs `transport.handleRequest` inside an `AsyncLocalStorage`. The recording middleware reads `trace_id` from the ALS; the pino logger has a `mixin` that does the same, so every log line emitted while a tool call is in-flight is auto-tagged. Outgoing propagation to upstream stdio MCPs is deferred (no header concept in stdio JSON-RPC).
 - **Test framework:** `cicd/tests/` — custom YAML-driven runner. See "Tests" below.
 
 ## Transport — HTTP only, with shim for Claude Code
