@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseTraceparent, traceIdToUuid } from '../../dist/log/traceparent.js';
+import { parseTraceparent } from '../../dist/log/traceparent.js';
 
 const VALID = '00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01';
 
@@ -80,15 +80,4 @@ test('parseTraceparent: trims whitespace', () => {
 test('parseTraceparent: accepts unknown future version (forward compat)', () => {
   const h = '01-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01';
   assert.equal(parseTraceparent(h)?.version, '01');
-});
-
-// ============ traceIdToUuid ============
-
-test('traceIdToUuid: converts 32-hex to UUID format', () => {
-  const out = traceIdToUuid('0af7651916cd43dd8448eb211c80319c');
-  assert.equal(out, '0af76519-16cd-43dd-8448-eb211c80319c');
-});
-
-test('traceIdToUuid: throws on wrong length', () => {
-  assert.throws(() => traceIdToUuid('deadbeef'), /32 hex chars/);
 });

@@ -53,21 +53,3 @@ export function parseTraceparent(header: string | undefined): ParsedTraceparent 
     sampled: (parseInt(trace_flags, 16) & 0x01) === 0x01,
   };
 }
-
-/**
- * Convert a 32-hex W3C trace-id into the 8-4-4-4-12 UUID string our DB expects.
- * Postgres `uuid` type accepts either form, but normalizing keeps query
- * filtering and join keys consistent.
- */
-export function traceIdToUuid(traceId: string): string {
-  if (traceId.length !== 32) {
-    throw new Error(`trace-id must be 32 hex chars, got ${traceId.length}`);
-  }
-  return [
-    traceId.slice(0, 8),
-    traceId.slice(8, 12),
-    traceId.slice(12, 16),
-    traceId.slice(16, 20),
-    traceId.slice(20, 32),
-  ].join('-');
-}
