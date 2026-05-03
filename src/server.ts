@@ -4,6 +4,7 @@ import { DeviceManager } from './adb/device-manager.js';
 import { NetworkCheck } from './network/network-check.js';
 import { EnterpriseWifiCommands } from './adb/enterprise-wifi.js';
 import { UpstreamProxy } from './mcp/upstream-proxy.js';
+import { runQuery, KNOWN_CLASSIFICATIONS } from './log/query.js';
 import { SecurityType, EapMethod, Phase2Method } from './types.js';
 
 export interface CreateServerResult {
@@ -84,6 +85,30 @@ export function createMcpServer(
             text: `Selected device: ${serial}\nModel: ${info.model}\nAndroid: ${info.androidVersion} (SDK ${info.sdkVersion})`,
           },
         ],
+      };
+    }
+  );
+
+  mcpServer.tool(
+    'query_log',
+    'Query the structured-logging tables (tool_calls + device_events) without raw SQL — server validates filters and parameterizes everything. Use this for post-mortems: pull every call for a trace_id, filter by tool_name or surface, narrow to errors_only, or pivot on a Phase 4 attribution classification (physical_disconnect, rsa_revoked, adb_server_confusion, unknown_disconnect). Set include_events together with trace_id to fetch the matched trace\'s device transitions alongside its tool calls. Returns a note when DATABASE_URL is unset.',
+    {
+      trace_id: z.string().optional().describe('Filter to a single trace_id (W3C 32-hex or UUID-dashed)'),
+      session_id: z.string().optional().describe('Filter to a single session_id (Phase 2 — currently always null in tool_calls)'),
+      tool_name: z.string().optional().describe('Exact match on tool_name, e.g. "wifi_connect"'),
+      surface: z.string().optional().describe('Exact match on surface, e.g. "native" or "proxy:playwright"'),
+      since: z.string().optional().describe('ISO timestamp; only rows with started_at >= since'),
+      until: z.string().optional().describe('ISO timestamp; only rows with started_at <= until'),
+      errors_only: z.boolean().optional().default(false).describe('Only return rows where error IS NOT NULL'),
+      classification: z.enum(KNOWN_CLASSIFICATIONS).optional().describe('Filter by Phase 4 attribution.classification'),
+      limit: z.number().int().optional().default(50).describe('Max rows to return (capped at 1000)'),
+      offset: z.number().int().optional().default(0).describe('Pagination offset'),
+      include_events: z.boolean().optional().default(false).describe('When set with trace_id, also fetch device_events sharing that trace_id'),
+    },
+    async (filters) => {
+      const result = await runQuery(filters);
+      return {
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     }
   );
