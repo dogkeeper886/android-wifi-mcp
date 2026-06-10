@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "android-wifi": {
+      "command": "node",
+      "args": [
+        "/home/jack/src/android-wifi-mcp/bin/android-wifi-shim.mjs",
+        "http://localhost:3000/mcp"
+      ]
+    }
+  }
+}
