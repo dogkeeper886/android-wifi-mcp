@@ -169,22 +169,30 @@ export type SmsWaitForOtpResult =
  * Bodies can legitimately contain commas, so we anchor on the known column
  * names instead of splitting on `, `. Assumes the projection order
  * address,body,date — the same order our query passes.
+ *
+ * `date` is the final column and its value is a numeric epoch, so we anchor on
+ * the LAST `, date=<digits>` (end of row) rather than the first occurrence — a
+ * body that itself contains `, date=` would otherwise truncate the message and
+ * drop the row to a NaN timestamp (#82).
+ *
+ * Exported for unit testing.
  */
-function parseContentQuery(stdout: string): SmsMessage[] {
+export function parseContentQuery(stdout: string): SmsMessage[] {
   const messages: SmsMessage[] = [];
   for (const line of stdout.split('\n')) {
     if (!line.trimStart().startsWith('Row:')) continue;
 
     const addressIdx = line.indexOf('address=');
     const bodyIdx = line.indexOf(', body=');
-    const dateIdx = line.indexOf(', date=');
-    if (addressIdx === -1 || bodyIdx === -1 || dateIdx === -1) continue;
+    // The real date delimiter is the trailing numeric one, not the first match.
+    const dateMatch = line.match(/, date=(\d+)\s*$/);
+    if (addressIdx === -1 || bodyIdx === -1 || !dateMatch) continue;
+    const dateIdx = line.lastIndexOf(', date=');
     if (!(addressIdx < bodyIdx && bodyIdx < dateIdx)) continue;
 
     const sender = line.slice(addressIdx + 'address='.length, bodyIdx).trim();
     const body = line.slice(bodyIdx + ', body='.length, dateIdx);
-    const dateStr = line.slice(dateIdx + ', date='.length).split(/[,\s]/)[0];
-    const timestamp = parseInt(dateStr, 10);
+    const timestamp = parseInt(dateMatch[1], 10);
 
     if (!sender || isNaN(timestamp)) continue;
     messages.push({ sender, body, timestamp });
