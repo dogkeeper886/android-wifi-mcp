@@ -6,6 +6,22 @@
         "bin/android-wifi-shim.mjs",
         "http://localhost:3000/mcp"
       ]
+    },
+    "mobile-next": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mobilenext/mobile-mcp@latest"
+      ]
+    },
+    "playwright-android": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest",
+        "--cdp-endpoint",
+        "http://localhost:9222"
+      ]
     }
   }
 }
