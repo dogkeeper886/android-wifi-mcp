@@ -239,7 +239,7 @@ Enterprise WiFi (802.1X/EAP) requires a companion Android app because the `cmd w
 | `network_ping` | Ping a host from the device |
 | `network_dns_lookup` | Perform DNS lookup |
 | `network_check_internet` | Check internet connectivity |
-| `network_check_captive` | Check for captive portal |
+| `network_check_captive` | Detect captive portal via Android's connectivity verdict (open/captive/unknown) |
 | `network_interface_info` | Get IP, gateway, DNS info |
 
 ### SMS / OTP
