@@ -93,6 +93,19 @@ adb devices
 
 You should see your device listed as "device" (not "unauthorized" or "offline").
 
+**Linux: if adb reports `no permissions`** — the device node is owned by root and
+your user can't open it. This is common when the server runs headless or as a
+service (no active local seat, so systemd-logind's `uaccess` ACL never applies).
+Install the bundled udev rule once:
+
+```bash
+make udev          # installs setup/udev/51-android-wifi-mcp.rules, reloads, re-triggers
+```
+
+The rule matches the ADB USB interface, so it covers any Android device and
+persists across replug/reboot. Without it a one-off `chmod` works but reverts on
+the next replug (the device node number changes).
+
 ### 3. Install and Run MCP Server
 
 ```bash
