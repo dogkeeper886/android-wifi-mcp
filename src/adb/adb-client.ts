@@ -38,12 +38,15 @@ export class AdbClient {
         exitCode: 0,
       };
     } catch (error: unknown) {
-      const err = error as { stdout?: string; stderr?: string; code?: number; message?: string };
+      const err = error as ExecError;
       return {
         success: false,
         stdout: err.stdout?.trim() || '',
-        stderr: err.stderr?.trim() || err.message || 'Unknown error',
-        exitCode: err.code || 1,
+        // Never fall back to err.message: for a timeout Node sets it to
+        // "Command failed: <full command>", leaking secret args (Wi-Fi
+        // password, EAP credentials) into stderr and tool_calls.error (#81).
+        stderr: formatAdbError(err, timeout),
+        exitCode: err.code ?? 1,
       };
     }
   }
@@ -222,7 +225,8 @@ export class AdbClient {
 
       const timer = setTimeout(() => {
         proc.kill('SIGKILL');
-        reject(new Error(`adb ${args.join(' ')} timed out after ${timeout}ms`));
+        // Don't echo args — keep secret-bearing commands out of error text (#81).
+        reject(new Error(`adb command timed out after ${timeout}ms`));
       }, timeout);
 
       proc.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -242,4 +246,36 @@ export class AdbClient {
       });
     });
   }
+}
+
+/** Shape of the error object child_process rejects with (execFile). */
+interface ExecError {
+  stdout?: string;
+  stderr?: string;
+  code?: number;
+  message?: string;
+  killed?: boolean;
+  signal?: string;
+}
+
+/**
+ * Build a safe error string for a failed `adb` invocation.
+ *
+ * Critically it NEVER returns Node's `err.message`: for a timeout that is
+ * `Command failed: <full command>`, which would leak secret args (Wi-Fi
+ * password, EAP credentials) into `AdbResult.stderr` and from there into
+ * surfaced errors and the `tool_calls.error` log column (#81). The command's
+ * own `stderr` (device output — no command line) is safe to pass through;
+ * otherwise we return a generic message.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function formatAdbError(err: ExecError, timeoutMs: number): string {
+  if (err.killed || err.signal) {
+    return `adb command timed out after ${timeoutMs}ms`;
+  }
+  const stderr = err.stderr?.trim();
+  if (stderr) return stderr;
+  if (err.code !== undefined) return `adb command failed (exit ${err.code})`;
+  return 'adb command failed';
 }
