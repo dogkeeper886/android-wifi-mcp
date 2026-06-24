@@ -180,18 +180,60 @@ export class WifiCommands {
       };
     }
 
-    // Wait for connection to establish
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Poll for L2 association. `cmd wifi connect-network` returns before
+    // the supplicant has converged, so a single fixed sleep + check
+    // false-negatived on slow associations. See #65.
+    //
+    // Early-bail: once we've seen the supplicant move through an active
+    // state and then settle in a terminal state for two consecutive polls,
+    // the attempt has failed (wrong password, AP rejection, handshake
+    // timeout) — return the supplicant state in the error so the agent
+    // can distinguish failure modes without waiting out the full deadline.
+    // Falls back to the time-based deadline when supplicantState can't
+    // be parsed (older Android variants).
+    const VERIFY_TIMEOUT_MS = 10_000;
+    const POLL_INTERVAL_MS = 500;
+    const TERMINAL_DEBOUNCE = 2;
+    const TERMINAL_STATES = new Set(['DISCONNECTED', 'INACTIVE', 'INTERFACE_DISABLED']);
+    const deadline = Date.now() + VERIFY_TIMEOUT_MS;
 
-    // Verify connection by checking actual status
-    const status = await this.getStatus();
-    const connected = status.connected && status.ssid === ssid;
+    let sawActive = false;
+    let terminalStreak = 0;
 
-    return {
-      success: connected,
-      ssid,
-      error: connected ? undefined : 'Failed to verify connection',
-    };
+    while (true) {
+      const status = await this.getStatus();
+      if (status.connected && status.ssid === ssid) {
+        return { success: true, ssid };
+      }
+
+      const s = status.supplicantState;
+      if (s) {
+        if (TERMINAL_STATES.has(s)) {
+          if (sawActive) {
+            terminalStreak++;
+            if (terminalStreak >= TERMINAL_DEBOUNCE) {
+              return {
+                success: false,
+                ssid,
+                error: `Connection failed (supplicant state: ${s})`,
+              };
+            }
+          }
+        } else {
+          sawActive = true;
+          terminalStreak = 0;
+        }
+      }
+
+      if (Date.now() >= deadline) {
+        return {
+          success: false,
+          ssid,
+          error: 'Failed to verify connection',
+        };
+      }
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
   }
 
   /**
@@ -347,6 +389,13 @@ export class WifiCommands {
     const freqMatch = dumpsys.match(/Frequency:\s*(\d+)/i);
     if (freqMatch) {
       status.frequency = parseInt(freqMatch[1], 10);
+    }
+
+    // Extract supplicant state from mWifiInfo. Used by connect() for
+    // early-bail when an attempt settles in a terminal state.
+    const suppMatch = dumpsys.match(/Supplicant state:\s*(\w+)/i);
+    if (suppMatch) {
+      status.supplicantState = suppMatch[1];
     }
 
     // L2 association requires more than the radio reporting CONNECTED.
