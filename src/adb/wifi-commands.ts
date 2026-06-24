@@ -1,4 +1,5 @@
 import { AdbClient } from './adb-client.js';
+import { parseRouteGet } from '../network/network-check.js';
 import {
   ScanResult,
   SavedNetwork,
@@ -359,15 +360,16 @@ export class WifiCommands {
   }
 
   /**
-   * Get IP address via alternative method
+   * Get the device's current IPv4 address via the routing table, derived from
+   * the active interface rather than a hardcoded `wlan0` (devices vary —
+   * e.g. Pixel 8 uses wlan1). `ip route get` yields the source IP directly.
    */
   async getIpAddress(): Promise<string | null> {
-    const result = await this.adb.shell('ip addr show wlan0 | grep "inet "');
+    const result = await this.adb.shell('ip route get 8.8.8.8');
     if (!result.success) {
       return null;
     }
 
-    const match = result.stdout.match(/inet\s+([0-9.]+)/);
-    return match ? match[1] : null;
+    return parseRouteGet(result.stdout).ipAddress ?? null;
   }
 }

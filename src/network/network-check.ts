@@ -17,7 +17,7 @@ export class NetworkCheck {
    * Ping a host from the device
    */
   async ping(host: string, count: number = 4): Promise<PingResult> {
-    const result = await this.adb.shell(`ping -c ${count} -W 5 ${host}`);
+    const result = await this.adb.shell(`ping -c ${count} -W 5 ${shQuote(host)}`);
 
     const pingResult: PingResult = {
       host,
@@ -46,56 +46,23 @@ export class NetworkCheck {
   }
 
   /**
-   * Perform DNS lookup from the device
+   * Resolve a hostname from the device.
+   *
+   * Modern Android ships no `nslookup`/`getent` (only ping/nc/toybox), so the
+   * old multi-tool fallback chain always fell through to ping anyway. We resolve
+   * directly with `ping -c 1`, which prints the resolved address as
+   * `PING host (1.2.3.4)`. IPv4 only, matching the prior behavior.
    */
   async dnsLookup(hostname: string): Promise<DnsResult> {
-    // Try nslookup first
-    let result = await this.adb.shell(`nslookup ${hostname}`);
-
     const dnsResult: DnsResult = {
       hostname,
       addresses: [],
     };
 
-    if (result.success) {
-      // Parse nslookup output
-      const lines = result.stdout.split('\n');
-      let inAnswer = false;
-
-      for (const line of lines) {
-        if (line.includes('Name:')) {
-          inAnswer = true;
-        }
-        if (inAnswer) {
-          const addrMatch = line.match(/Address(?:\s+\d)?:\s*([0-9.]+|[0-9a-f:]+)/i);
-          if (addrMatch && !addrMatch[1].includes(':')) {
-            // Skip IPv6 for now, just get IPv4
-            dnsResult.addresses.push(addrMatch[1]);
-          }
-        }
-      }
-    }
-
-    // If nslookup didn't work, try getent
-    if (dnsResult.addresses.length === 0) {
-      result = await this.adb.shell(`getent hosts ${hostname}`);
-      if (result.success) {
-        const match = result.stdout.match(/^([0-9.]+)/);
-        if (match) {
-          dnsResult.addresses.push(match[1]);
-        }
-      }
-    }
-
-    // If still no results, try ping with count 1 to get IP
-    if (dnsResult.addresses.length === 0) {
-      result = await this.adb.shell(`ping -c 1 ${hostname}`);
-      if (result.success) {
-        const match = result.stdout.match(/\(([0-9.]+)\)/);
-        if (match) {
-          dnsResult.addresses.push(match[1]);
-        }
-      }
+    const result = await this.adb.shell(`ping -c 1 -W 2 ${shQuote(hostname)}`);
+    const match = result.stdout.match(/\(([0-9.]+)\)/);
+    if (match) {
+      dnsResult.addresses.push(match[1]);
     }
 
     if (dnsResult.addresses.length === 0) {
@@ -106,35 +73,28 @@ export class NetworkCheck {
   }
 
   /**
-   * Check internet connectivity
+   * Check internet connectivity.
+   *
+   * The old implementation probed HTTP endpoints with `curl`, which doesn't
+   * exist on modern Android (it only ever worked via the ping fallback). We
+   * prefer Android's own `VALIDATED` verdict — the result of its connectivity
+   * validation, the same signal #76 uses for captive detection — and fall back
+   * to a `ping` when no validated Wi-Fi network is present.
    */
   async checkInternet(): Promise<ConnectivityResult> {
-    const testUrls = [
-      { url: 'https://www.google.com/generate_204', expected: 204 },
-      { url: 'https://connectivitycheck.gstatic.com/generate_204', expected: 204 },
-      { url: 'https://www.cloudflare.com/cdn-cgi/trace', expected: 200 },
-    ];
-
-    for (const test of testUrls) {
-      const startTime = Date.now();
-      const result = await this.adb.shell(
-        `curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 --max-time 10 "${test.url}"`
-      );
-      const latency = Date.now() - startTime;
-
-      if (result.success) {
-        const httpCode = parseInt(result.stdout.trim(), 10);
-        if (httpCode === test.expected || (httpCode >= 200 && httpCode < 400)) {
-          return {
-            hasInternet: true,
-            latency,
-            endpoint: test.url,
-          };
-        }
+    const dump = await this.adb.shell('dumpsys connectivity');
+    if (dump.success) {
+      const agentLine = findActiveWifiAgentLine(dump.stdout);
+      if (agentLine && parseCapabilities(agentLine).includes('VALIDATED')) {
+        return {
+          hasInternet: true,
+          endpoint: 'android-connectivity (VALIDATED)',
+        };
       }
     }
 
-    // Try a simple ping as fallback
+    // Fallback: a network without VALIDATED (or non-Wi-Fi) may still reach the
+    // internet — confirm with a ping.
     const pingResult = await this.ping('8.8.8.8', 1);
     if (pingResult.alive) {
       return {
@@ -146,7 +106,7 @@ export class NetworkCheck {
 
     return {
       hasInternet: false,
-      error: 'Failed to reach any internet endpoints',
+      error: 'No VALIDATED network and 8.8.8.8 is unreachable',
     };
   }
 
@@ -203,7 +163,14 @@ export class NetworkCheck {
   }
 
   /**
-   * Get network interface information
+   * Get network interface information.
+   *
+   * The old version hardcoded `wlan0` (DOWN on devices that use `wlan1`) and
+   * read DNS from `getprop net.dns*` (empty on modern Android), so it returned
+   * nothing useful. We read the active Wi-Fi network's LinkProperties from
+   * `dumpsys connectivity` (one call → interface, IPv4, gateway, DNS) and fall
+   * back to the routing table (`ip route get 8.8.8.8`) to fill any gaps or
+   * cover the no-Wi-Fi-agent case.
    */
   async getInterfaceInfo(): Promise<{
     interface: string;
@@ -217,38 +184,45 @@ export class NetworkCheck {
       gateway?: string;
       dns?: string[];
     } = {
-      interface: 'wlan0',
+      interface: 'unknown',
     };
 
-    // Get IP address
-    const ipResult = await this.adb.shell('ip addr show wlan0 | grep "inet "');
-    if (ipResult.success) {
-      const match = ipResult.stdout.match(/inet\s+([0-9.]+)/);
-      if (match) {
-        result.ipAddress = match[1];
-      }
+    const dump = await this.adb.shell('dumpsys connectivity');
+    const agentLine = dump.success ? findActiveWifiAgentLine(dump.stdout) : null;
+    if (agentLine) {
+      const iface = parseInterfaceName(agentLine);
+      if (iface) result.interface = iface;
+      const ip = parseIpv4LinkAddress(agentLine);
+      if (ip) result.ipAddress = ip;
+      const gw = parseGateway(agentLine);
+      if (gw) result.gateway = gw;
+      const dns = parseDnsAddresses(agentLine);
+      if (dns.length > 0) result.dns = dns;
     }
 
-    // Get gateway
-    const gwResult = await this.adb.shell('ip route | grep default');
-    if (gwResult.success) {
-      const match = gwResult.stdout.match(/via\s+([0-9.]+)/);
-      if (match) {
-        result.gateway = match[1];
-      }
-    }
-
-    // Get DNS servers
-    const dnsResult = await this.adb.shell('getprop net.dns1 && getprop net.dns2');
-    if (dnsResult.success) {
-      const dnsServers = dnsResult.stdout.split('\n').filter(line => line.trim());
-      if (dnsServers.length > 0) {
-        result.dns = dnsServers;
+    // Fill gaps from the routing table. `ip route get 8.8.8.8` resolves the
+    // outgoing route (dev/src/via) regardless of whether the target is
+    // reachable, so it works pre-auth and on non-wlan0 interfaces.
+    if (result.interface === 'unknown' || !result.ipAddress || !result.gateway) {
+      const route = await this.adb.shell('ip route get 8.8.8.8');
+      if (route.success) {
+        const r = parseRouteGet(route.stdout);
+        if (result.interface === 'unknown' && r.interface) result.interface = r.interface;
+        if (!result.ipAddress && r.ipAddress) result.ipAddress = r.ipAddress;
+        if (!result.gateway && r.gateway) result.gateway = r.gateway;
       }
     }
 
     return result;
   }
+}
+
+/**
+ * Single-quote a string for safe interpolation into a device `adb shell`
+ * command (the host side uses execFile, but the device runs the string in sh).
+ */
+function shQuote(s: string): string {
+  return `'${s.replace(/'/g, "'\\''")}'`;
 }
 
 /**
@@ -309,4 +283,79 @@ export function extractPortalUrl(agentLine: string): string | undefined {
     /(?:userPortalUrl|CaptivePortalApiUrl|venueInfoUrl|redirectUrl)=([^\s,}\]]+)/
   );
   return m && m[1] && m[1] !== 'null' ? m[1] : undefined;
+}
+
+/**
+ * Parse the interface name from a NetworkAgentInfo line's LinkProperties,
+ * e.g. `lp{{InterfaceName: wlan1 LinkAddresses: [...] ...}}`. Undefined if absent.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function parseInterfaceName(agentLine: string): string | undefined {
+  const m = agentLine.match(/InterfaceName:\s*(\S+)/);
+  return m ? m[1] : undefined;
+}
+
+/**
+ * Pick the IPv4 address out of `LinkAddresses: [ fe80::.../64,192.168.6.133/24 ]`.
+ * Skips IPv6 entries. Undefined if no IPv4 link address is present.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function parseIpv4LinkAddress(agentLine: string): string | undefined {
+  const block = agentLine.match(/LinkAddresses:\s*\[([^\]]*)\]/);
+  if (!block) return undefined;
+  for (const addr of block[1].split(',')) {
+    const v4 = addr.trim().match(/^(\d{1,3}(?:\.\d{1,3}){3})\/\d+$/);
+    if (v4) return v4[1];
+  }
+  return undefined;
+}
+
+/**
+ * Parse `DnsAddresses: [ /192.168.6.1, /8.8.8.8 ]` into a list of IPv4 strings
+ * (leading `/` stripped, IPv6 skipped). Empty array if absent.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function parseDnsAddresses(agentLine: string): string[] {
+  const block = agentLine.match(/DnsAddresses:\s*\[([^\]]*)\]/);
+  if (!block) return [];
+  return block[1]
+    .split(',')
+    .map(s => s.trim().replace(/^\//, ''))
+    .filter(s => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(s));
+}
+
+/**
+ * Parse the gateway from a LinkProperties `ServerAddress: /192.168.6.1`.
+ * Undefined if absent.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function parseGateway(agentLine: string): string | undefined {
+  const m = agentLine.match(/ServerAddress:\s*\/?(\d{1,3}(?:\.\d{1,3}){3})/);
+  return m ? m[1] : undefined;
+}
+
+/**
+ * Parse `ip route get 8.8.8.8` output, e.g.
+ * `8.8.8.8 via 192.168.6.1 dev wlan1 table 1048 src 192.168.6.133 uid 2000`.
+ * Returns whichever of interface/ipAddress/gateway are present.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function parseRouteGet(output: string): {
+  interface?: string;
+  ipAddress?: string;
+  gateway?: string;
+} {
+  const res: { interface?: string; ipAddress?: string; gateway?: string } = {};
+  const dev = output.match(/\bdev\s+(\S+)/);
+  if (dev) res.interface = dev[1];
+  const src = output.match(/\bsrc\s+(\d{1,3}(?:\.\d{1,3}){3})/);
+  if (src) res.ipAddress = src[1];
+  const via = output.match(/\bvia\s+(\d{1,3}(?:\.\d{1,3}){3})/);
+  if (via) res.gateway = via[1];
+  return res;
 }
