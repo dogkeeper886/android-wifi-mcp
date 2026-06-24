@@ -1,0 +1,17 @@
+# android-wifi-mcp: non-root adb access for any Android device.
+#
+# Matches the ADB USB interface (bInterfaceClass=ff, bInterfaceSubClass=42,
+# bInterfaceProtocol=01 — encoded by udev as ":ff4201:") instead of a vendor ID,
+# so it applies to every vendor (Pixel, Samsung, etc.) with no list to maintain.
+#
+# Why this exists: when the MCP backend runs headless or as a service — its
+# intended "persistent backend" deployment — there is no active local seat, so
+# systemd-logind's uaccess ACL never grants the user access and adb reports
+# "no permissions". MODE=0666 guarantees access regardless of seat or group.
+#
+# Stricter alternative for multi-user hosts: replace MODE="0666" with
+#   MODE="0660", GROUP="plugdev"
+# and add the adb user to the plugdev group (newgrp / re-login to take effect).
+#
+# Install with `make udev` (copies this file to /etc/udev/rules.d/ and reloads).
+SUBSYSTEM=="usb", ENV{ID_USB_INTERFACES}=="*:ff4201:*", MODE="0666", TAG+="uaccess"

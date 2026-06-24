@@ -1,10 +1,11 @@
 .PHONY: up down restart logs psql migrate migrate-down test test-unit build clean \
-        doctor adb devices serve serve-stop serve-restart setup help
+        doctor adb devices udev serve serve-stop serve-restart setup help
 
 COMPOSE ?= docker compose
 PSQL_USER ?= mcp
 PSQL_DB ?= android_wifi_mcp
 PORT ?= 3000
+UDEV_RULE ?= /etc/udev/rules.d/51-android-wifi-mcp.rules
 
 # Bare `make` prints help rather than starting the Postgres stack.
 .DEFAULT_GOAL := help
@@ -13,6 +14,7 @@ help:
 	@echo "Host setup / server lifecycle:"
 	@echo "  make doctor        preflight: node, adb, device, build, server"
 	@echo "  make adb           install adb (Fedora/dnf: android-tools)"
+	@echo "  make udev          install udev rule for non-root adb access (Linux)"
 	@echo "  make devices       list connected adb devices"
 	@echo "  make serve         start the MCP backend (foreground, :$(PORT))"
 	@echo "  make serve-stop    stop the running backend"
@@ -40,6 +42,7 @@ doctor:
 		ready=$$(printf '%s\n' "$$d" | awk '$$2=="device"' | grep -c .); \
 		if [ -z "$$d" ]; then echo "none connected -> plug in phone, enable USB debugging"; \
 		elif [ "$$ready" -gt 0 ]; then echo "$$ready ready"; \
+		elif printf '%s\n' "$$d" | grep -q "no permissions"; then echo "NO PERMISSIONS -> make udev (install Android udev rule)"; \
 		elif printf '%s\n' "$$d" | grep -q unauthorized; then echo "UNAUTHORIZED   -> tap Allow on the phone RSA prompt"; \
 		else echo "attached but not ready ($$(printf '%s\n' "$$d" | awk '{print $$2}' | sort -u | tr '\n' ' ')) -> check cable/USB mode"; fi; \
 	else echo "skipped (no adb)"; fi
@@ -49,6 +52,15 @@ adb:
 	@command -v dnf >/dev/null 2>&1 || { echo "make adb targets dnf (Fedora). On other distros install Android platform-tools manually and put adb on PATH."; exit 1; }
 	sudo dnf install -y android-tools
 	@adb version | head -1
+
+udev:
+	@command -v udevadm >/dev/null 2>&1 || { echo "udevadm not found — this target is Linux-only (udev). On other OSes adb permissions are handled differently."; exit 1; }
+	sudo install -m 0644 setup/udev/51-android-wifi-mcp.rules $(UDEV_RULE)
+	sudo udevadm control --reload-rules
+	sudo udevadm trigger --subsystem-match=usb --action=add
+	@echo "Installed $(UDEV_RULE). Re-applied to currently attached devices."
+	@command -v adb >/dev/null 2>&1 && { adb kill-server >/dev/null 2>&1 || true; adb start-server >/dev/null 2>&1 || true; } || true
+	@$(MAKE) --no-print-directory doctor | grep '^device' || true
 
 devices:
 	@command -v adb >/dev/null 2>&1 || { echo "adb not found -> make adb"; exit 1; }
