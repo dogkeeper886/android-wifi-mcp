@@ -122,6 +122,12 @@ export class DeviceManager {
    * Refresh the list of connected devices
    */
   async refreshDevices(): Promise<Device[]> {
+    // The info-cache loop below selects each newly-seen device to query it,
+    // mutating the active selection as a side effect. Capture the caller's
+    // selection up front and restore it before returning, so refreshDevices()
+    // (and callers like device_list) never silently switch the active device
+    // on a multi-device host (#83).
+    const previousSelection = this.adb.getSelectedDevice();
     const devices = await this.adb.listDevices();
 
     // Update device info cache for connected devices
@@ -145,11 +151,13 @@ export class DeviceManager {
       }
     }
 
-    // Restore previous selection if still valid
-    const currentSelection = this.adb.getSelectedDevice();
-    if (currentSelection && !connectedSerials.has(currentSelection)) {
-      this.adb.selectDevice(null);
-    }
+    // Restore the caller's selection — or clear it if that device is gone, or
+    // if nothing was selected before (don't leak the last-enumerated device).
+    this.adb.selectDevice(
+      previousSelection && connectedSerials.has(previousSelection)
+        ? previousSelection
+        : null
+    );
 
     return devices;
   }
