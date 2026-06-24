@@ -151,60 +151,54 @@ export class NetworkCheck {
   }
 
   /**
-   * Check for captive portal
+   * Check for a captive portal using Android's own network validation.
+   *
+   * The previous implementation shelled out to `curl`, but modern Android
+   * images ship no HTTP client (no curl/wget — only ping/nc/toybox). Every
+   * call therefore failed with exit 127 and returned a false `isCaptive:false`
+   * on *every* network, captive or not (#76). Instead we read the verdict that
+   * Android's ConnectivityService already computed — the same one that raises
+   * the "Sign in to Wi-Fi network" notification — from `dumpsys connectivity`.
    */
   async checkCaptivePortal(): Promise<CaptivePortalResult> {
-    // Android's captive portal detection URL
-    const captiveCheckUrl = 'http://connectivitycheck.gstatic.com/generate_204';
-
-    const result = await this.adb.shell(
-      `curl -s -o /dev/null -w "%{http_code}\\n%{redirect_url}" --connect-timeout 5 --max-time 10 -L "${captiveCheckUrl}"`
-    );
-
-    if (!result.success) {
+    const dump = await this.adb.shell('dumpsys connectivity');
+    if (!dump.success) {
       return {
         isCaptive: false,
-        error: 'Failed to check captive portal',
+        status: 'unknown',
+        error: 'Failed to read connectivity state (dumpsys connectivity)',
       };
     }
 
-    const lines = result.stdout.trim().split('\n');
-    const httpCode = parseInt(lines[0], 10);
-    const redirectUrl = lines[1] || '';
-
-    // 204 = No captive portal
-    if (httpCode === 204) {
+    const agentLine = findActiveWifiAgentLine(dump.stdout);
+    if (agentLine === null) {
       return {
         isCaptive: false,
+        status: 'unknown',
+        error: 'No connected Wi-Fi network found',
       };
     }
 
-    // 301/302 with redirect = Captive portal
-    if ((httpCode === 301 || httpCode === 302) && redirectUrl) {
+    const caps = parseCapabilities(agentLine);
+
+    if (caps.includes('CAPTIVE_PORTAL')) {
       return {
         isCaptive: true,
-        portalUrl: redirectUrl,
+        status: 'captive',
+        portalUrl: extractPortalUrl(agentLine),
       };
     }
 
-    // 200 with different content = Captive portal serving a page
-    if (httpCode === 200) {
-      // Get actual content to see if it's a portal
-      const contentResult = await this.adb.shell(
-        `curl -s --connect-timeout 5 --max-time 10 "${captiveCheckUrl}" | head -c 200`
-      );
-
-      if (contentResult.success && contentResult.stdout.length > 0) {
-        // If we got content, it's likely a captive portal
-        return {
-          isCaptive: true,
-          portalUrl: captiveCheckUrl,
-        };
-      }
+    if (caps.includes('VALIDATED')) {
+      return { isCaptive: false, status: 'open' };
     }
 
+    // Connected but neither captive nor validated yet — partial/limbo. Report
+    // 'unknown' rather than 'open' so callers don't read it as a clean pass.
     return {
       isCaptive: false,
+      status: 'unknown',
+      error: 'Network connected but not yet validated (no captive-portal flag)',
     };
   }
 
@@ -255,4 +249,64 @@ export class NetworkCheck {
 
     return result;
   }
+}
+
+/**
+ * Find the `NetworkAgentInfo` line for the device's Wi-Fi network in
+ * `dumpsys connectivity` output (each agent prints on one line). Prefers the
+ * agent whose id matches the `Active default network: N` header — important
+ * when several networks are briefly connected at once, e.g. during a Wi-Fi
+ * handover (the captive→post-auth transition this tool exists for) or a
+ * primary + restricted/guest pair, where the *first* WIFI agent is not
+ * necessarily the one carrying the live verdict. Falls back to the first
+ * connected Wi-Fi agent (covers the case where the default network is
+ * cellular because Wi-Fi failed validation). Returns null if none found.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function findActiveWifiAgentLine(dump: string): string | null {
+  const lines = dump.split('\n');
+  const isConnectedWifi = (line: string): boolean =>
+    line.includes('NetworkAgentInfo') && /ni\{WIFI CONNECTED/.test(line);
+
+  const def = dump.match(/Active default network:\s*(\d+)/);
+  if (def) {
+    const marker = `NetworkAgentInfo{network{${def[1]}}`;
+    for (const line of lines) {
+      if (line.includes(marker) && isConnectedWifi(line)) return line;
+    }
+  }
+  for (const line of lines) {
+    if (isConnectedWifi(line)) return line;
+  }
+  return null;
+}
+
+/**
+ * Parse the NetworkCapabilities token list out of a NetworkAgentInfo line,
+ * e.g. `... nc{[ ... Capabilities: NOT_METERED&INTERNET&VALIDATED&... ]}`.
+ * Returns the tokens split on `&` so callers match exactly (a substring test
+ * would conflate a token with a longer one). Empty array if none found.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function parseCapabilities(agentLine: string): string[] {
+  const m = agentLine.match(/Capabilities:\s*([A-Za-z_&]+)/);
+  return m ? m[1].split('&') : [];
+}
+
+/**
+ * Best-effort extraction of a captive-portal URL from a single
+ * NetworkAgentInfo line (Android exposes it via CaptivePortalData when
+ * present). Scoped to the agent line — not the whole dump — so it can't pick
+ * up an unrelated URL elsewhere in the output. Returns undefined when no URL
+ * is advertised, which is common since many portals only redirect.
+ *
+ * Pure function — exported for unit testing.
+ */
+export function extractPortalUrl(agentLine: string): string | undefined {
+  const m = agentLine.match(
+    /(?:userPortalUrl|CaptivePortalApiUrl|venueInfoUrl|redirectUrl)=([^\s,}\]]+)/
+  );
+  return m && m[1] && m[1] !== 'null' ? m[1] : undefined;
 }

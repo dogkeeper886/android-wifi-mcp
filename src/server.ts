@@ -778,7 +778,7 @@ export function createMcpServer(
 
   mcpServer.tool(
     'network_check_captive',
-    'Check for captive portal on the device',
+    "Detect captive portal via Android's connectivity verdict (open/captive/unknown)",
     {},
     async () => {
       await ensureDevice();

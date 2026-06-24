@@ -111,6 +111,13 @@ export interface ConnectivityResult {
 
 export interface CaptivePortalResult {
   isCaptive: boolean;
+  /**
+   * Tri-state verdict. `captive` = portal detected, `open` = network validated
+   * (real internet), `unknown` = could not determine (connected-but-unvalidated,
+   * or the verdict was unreadable). Distinguishing `unknown` from `open` keeps a
+   * probe failure from masquerading as a clean negative (#76).
+   */
+  status: 'captive' | 'open' | 'unknown';
   portalUrl?: string;
   error?: string;
 }

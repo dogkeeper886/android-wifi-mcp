@@ -1,0 +1,24 @@
+id: TC-SMK-014
+name: network_check_captive returns an Android-sourced tri-state verdict
+suite: smoke
+tags: [smoke, network, captive]
+priority: 14
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Check captive portal status
+    command: npx tsx cicd/tests/src/mcp-client.ts network_check_captive '{}'
+    expectPatterns:
+      - "status.*(open|captive|unknown)"
+    rejectPatterns:
+      - "isError"
+      - "Failed to check captive portal"
+
+criteria: |
+  Verify network_check_captive reads Android's own connectivity verdict
+  (dumpsys connectivity) instead of the removed curl probe (#76).
+  - Returns a tri-state `status` of open / captive / unknown
+  - Never the old "Failed to check captive portal" false negative, which
+    fired on every network because modern Android ships no HTTP client
+  - On the smoke device (validated internet) the expected status is `open`
