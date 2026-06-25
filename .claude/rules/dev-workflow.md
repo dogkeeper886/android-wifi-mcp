@@ -1,6 +1,6 @@
 ---
 paths:
-  - "commands/dev-workflow/**/*.md"
+  - ".claude/commands/dev-workflow/**/*.md"
 ---
 
 # dev-workflow
@@ -51,7 +51,6 @@ before `dw-tasks` decomposes it — no `dw-*` command produces or gates it (mirr
 | `dw-plan`      | **human review** (the plan issue) | the approach covers the story, before decomposition |
 | `dw-tasks`     | `dw-review-tasks`     | the issues cover the plan; each lean; trace back to the plan |
 | `dw-implement` | `dw-review-implement` | the change delivers the issue, surgical, fits the project |
-| `dw-test-design` | *(verified by running the suite)* | tests pass, native to the framework |
 | `dw-create-pr` | *(human review + `/review`)* | the PR overview before merge |
 | `dw-merge`     | *(is the terminal gate)* | green CI + human review |
 
@@ -70,3 +69,11 @@ review passes plus a plan issue on a typo is ritual, not rigor.
 - **GitHub issues** already hold the work; the plan is one too (the parent), so the
   approach, its review, and its history live where the tasks do — no separate plan store.
 - **CI** is the project's existing checks + human review — the merge gate, not a new pipeline.
+
+## Project-specific values
+
+Story paths, the `STORY-XXX` id scheme, label names + colours, the `[STORY-XXX]` /
+`Part of #<plan>` linking patterns, the `issue-<N>-<slug>` branch name, and the merge
+strategy are **not** owned by the `dw-*` commands — they resolve from
+`.claude/rules/project-profile.md`. The values a command shows are the defaults; change
+them in the profile, not the command.

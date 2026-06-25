@@ -1,105 +1,128 @@
-# android-wifi-mcp — CLAUDE.md
+# CLAUDE.md
 
-Project-specific guidance for Claude. Loaded automatically when working in this repo.
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-## What this is
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-An MCP server, originally for **Android WiFi control via ADB**, now expanded into a **broader on-device QA test toolkit**. Drives a phone over USB so Claude can run end-to-end mobile flows: connect to networks, capture OTPs, automate UI, optionally control browsers — all from a single MCP endpoint.
+## 1. Think Before Coding
 
-The user is a QA engineer. Treat this as a test-tool first: prefer reliability, observability, and deterministic teardown over user-facing polish.
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
 
-## Architecture
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
+
+## 2. Simplicity First
+
+**Minimum code that solves the problem. Nothing speculative.**
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
+
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+## 3. Surgical Changes
+
+**Touch only what you must. Clean up only your own mess.**
+
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
+
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
+
+The test: Every changed line should trace directly to the user's request.
+
+## 4. Goal-Driven Execution
+
+**Define success criteria. Loop until verified.**
+
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
+
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
+
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## 5. Workflow discipline
+
+Substantial work flows through a pipeline; each step is a gate that stops for a
+human decision (commands suggest the next, they never auto-run it):
 
 ```
-Zed / Cursor / etc.  ──HTTP──►  android-wifi-mcp (this server)  ──ADB──►  phone
-                                       │
-Claude Code ─stdio─► shim ─HTTP─►      │
-                                       └──MCP/stdio──►  upstream MCPs (e.g. @playwright/mcp)
-                                                              (transparently proxied — see #14)
+dw-story → dw-review-story → dw-plan → [human reviews the plan issue]
+        → dw-tasks → dw-review-tasks → dw-implement → dw-review-implement
+        → dw-create-pr → [human review + /review] → dw-merge
 ```
 
-- **Server entrypoint:** `src/index.ts` boots a long-running HTTP server (Streamable HTTP transport). Stdio support was removed in #51 Phase 0a — Claude Code clients connect via the bundled stdio shim (`bin/android-wifi-shim.mjs`).
-- **Tool registry:** `src/server.ts` — `createMcpServer(deviceManager)` returns `{ server, nativeToolNames }` and registers 32 native tools.
-- **Proxy:** `src/mcp/upstream-proxy.ts` spawns upstream MCP subprocesses on startup and merges their tools into one tools/list. Configured via `UPSTREAM_MCP` env var.
-- **ADB layer:** `src/adb/` — `adb-client.ts` (process wrapper), `device-manager.ts` (multi-device), then per-domain wrappers: `wifi-commands.ts`, `screenshot-commands.ts`, `sms-commands.ts`, `enterprise-wifi.ts`, `settings-commands.ts`, `file-commands.ts`.
-- **Companion app:** `companion-app/` — Kotlin Android app that handles 802.1X enterprise WiFi (the only flow that needs an on-device daemon today).
-- **Network helpers:** `src/network/network-check.ts`.
-- **Structured logging (opt-in, Phase 0b of #51):** `src/db/{pool,writer}.ts` + `src/log/{logger,middleware}.ts`. `installCallRecording()` wraps the final `tools/call` handler and writes a row per call to `tool_calls`. Pool is lazy: when `DATABASE_URL` is unset, recording is a silent no-op. Postgres lives in `docker-compose.yml` (`make up`), migrations in `migrations/` via `node-pg-migrate` (`make migrate`). pino emits app logs to stderr (or `LOG_DEST=path`).
-- **Trace propagation (Phase 1 of #51):** `src/log/{traceparent,trace-context}.ts`. The express layer parses incoming W3C `traceparent` headers (or generates a fresh trace context) and runs `transport.handleRequest` inside an `AsyncLocalStorage`. The recording middleware reads `trace_id` from the ALS; the pino logger has a `mixin` that does the same, so every log line emitted while a tool call is in-flight is auto-tagged. Outgoing propagation to upstream stdio MCPs is deferred (no header concept in stdio JSON-RPC).
-- **Session labeling (Phase 2a of #51):** `establishTraceContext` captures an `X-Caller-Session-Id` request header into `TraceContext.session_id`, the middleware writes it to `tool_calls.session_id`, and `query_log` filters on it. This is **client-provided labeling**, not server-managed sessions — the SDK's `Server` is single-transport-per-instance, so true per-session state isolation would need one McpServer per session (deferred until per-session state is actually needed). Custom header (not the spec's `Mcp-Session-Id`, which is server-issued in stateful mode) keeps the intent unambiguous. Two parallel callers sending different `X-Caller-Session-Id` values are now distinguishable in logs and query results; missing/empty/oversized values normalize to null or truncate at 256 chars.
-- **Device observer (Phase 3a of #51):** `src/adb/device-observer.ts` spawns `adb track-devices` as a subprocess and parses the length-prefixed transition stream. Every state change → row in `device_events` (when `DATABASE_URL` is set) + entry in an in-memory ring buffer. `device_event_log` tool exposes the ring; `DeviceManager.ensureDeviceSelected()` enriches the "no device" error with the most recent detach so the agent can decide replug/restart/re-trust. Subprocess death is handled with exponential backoff. Transitions emit outside any tool-call ALS, so `device_events.trace_id` stays null (correlation in Phase 4 happens via serial + time).
-- **Cross-layer attribution (Phase 4 of #51):** `src/log/attribution.ts` classifies failed tool calls against the observer's recent transitions. When a call fails AND a usability-loss transition (`new_state` ∈ {null, unauthorized, offline}) happened in `[started_at - 5s, completed_at + 1s]`, the middleware attaches `{ classification, hint, related_event }` to `tool_calls.error.attribution`. Classifications: `physical_disconnect`, `rsa_revoked`, `adb_server_confusion`, `unknown_disconnect`. Tool-internal errors (no related event) leave the column unset.
-- **Structured query (Phase 5 of #51):** `src/log/query.ts` exposes `query_log` — a tool that lets agents inspect `tool_calls` + `device_events` without raw SQL. `buildQuery` is a pure parameterized-SQL builder (no interpolation surface), `runQuery` executes via the pg pool and tolerates `DATABASE_URL` unset by returning a friendly note. Filters: `trace_id` / `session_id` / `tool_name` / `surface` / `since` / `until` / `errors_only` / `classification` (Phase 4 JSONB extract) / `limit` / `offset` / `include_events`. Limit capped at 1000.
-- **Test framework:** `cicd/tests/` — custom YAML-driven runner. See "Tests" below.
+The full flow + producer→review pairing lives in `.claude/rules/dev-workflow.md`. Trivial
+work skips the plan: `dw-story → dw-tasks`.
 
-## Transport — HTTP only, with shim for Claude Code
+**qa-workflow** is the sibling pipeline — same gated discipline, turning a story into
+trustworthy test docs:
 
-The backend speaks **Streamable HTTP only**. Stdio support in our codebase was deleted in #51 Phase 0a. Reasoning:
+```
+qw-plan → qw-review-plan → qw-cases → qw-review-cases
+```
 
-- The unified-server vision (one persistent backend, all clients connect to it for shared logging/observability/session routing) needs a long-running process. Stdio's "spawn-per-client" model is incompatible.
-- Modern MCP clients (Zed, Cursor, etc.) speak HTTP natively.
-- Claude Code's bundled HTTP MCP client crashes (issue #7, upstream bug). We sidestep by shipping our own stdio shim — `bin/android-wifi-shim.mjs` — which translates stdio↔HTTP for Claude Code only. The shim is ~30 LOC, lives in our repo, no external dependencies.
+The full flow + pairing lives in `.claude/rules/qa-workflow.md`.
 
-Operational notes:
-- `npm start` → HTTP on `:3000` (override via `PORT` env). Pass `PORT=0` to let the OS assign (used by tests).
-- Modern clients: `claude mcp add --transport http android-wifi http://localhost:3000/mcp`.
-- Claude Code: `claude mcp add --transport stdio android-wifi android-wifi-shim http://localhost:3000/mcp` (after `npm install -g .`).
-- `cicd/tests/src/mcp-client.ts` spawns its own server (HTTP, OS-assigned port) per test step, parses the listening line from stderr, connects via `StreamableHTTPClientTransport`, calls one tool, tears down. Per-test isolation matches the prior stdio model.
+**doc-workflow** is the sibling that turns a codebase into its README — same gated
+discipline:
 
-## Tests
+```
+doc-gen-readme → doc-review-readme → [human reviews] → PR
+```
 
-YAML-driven framework under `cicd/tests/`, ported from `ruckus1-mcp` and adapted for on-device testing.
+The full flow + pairing lives in `.claude/rules/doc-workflow.md`.
 
-- **`cicd/tests/src/cli.ts`** — `commander`-based CLI: `run` (with `--suite`, `--tag`, `--id` filters) and `list`.
-- **`cicd/tests/src/executor.ts`** — runs each test step as a shell command, captures stdout/stderr, applies `expectPatterns` / `rejectPatterns`. **Per-test** snapshot/restore of WiFi state via `device-state.ts` so a failing test cannot poison the next.
-- **`cicd/tests/src/mcp-client.ts`** — spawns `node dist/index.js` (HTTP, `PORT=0`), parses the listening URL from stderr, connects via `StreamableHTTPClientTransport`, calls one tool, prints JSON result, tears server down.
+Two review gates are external skills this toolkit does not own — invoke them by hand:
+- `code-review` (bundled): adversarial diff review. Run after `dw-implement`,
+  alongside `dw-review-implement`. Earns its cost on logic/risk; skip for pure docs.
+- `/review` (builtin): PR overview. Run after `dw-create-pr`, before `dw-merge`.
 
-Test cases live in `cicd/tests/testcases/<suite>/TC-<SUITE>-NNN.yml`. Suites: `smoke` (read-only + roundtrips), `sms`, `notifications`, `proxy`, plus pending `wifi`/`enterprise`/`portal`. Each test step runs `npx tsx cicd/tests/src/mcp-client.ts <tool> '<args>'`.
+Don't wire these into the `dw-*` commands — they may not exist in every install,
+and a command that references a missing skill is a dangling pointer.
 
-**Pattern-matching gotcha:** `mcp-client.ts` returns double-encoded JSON (the tool's JSON is inside a `text` field with escaped quotes). **Use bare strings** in patterns:
-- ✅ `connected.*true`, `hasInternet.*true`
-- ❌ `'"connected": true'` — won't match `\"connected\": true`
+**Right-size it.** A typo or a one-line doc change does not need the full chain —
+use judgment; branch + PR + merge is enough. The three review passes overlap:
+`dw-review-implement` is the always-on substance gate, `code-review` is for real
+logic or risk, `/review` is the PR summary. Running all three on a trivial diff is
+ritual, not rigor.
 
-`isError` is the canonical failure signal (bare).
+## 6. Artifact & doc review discipline
 
-`{{TEST_RUN_ID}}` is auto-injected (GITHUB_RUN_ID in CI; random 6 chars locally) for fixture namespacing.
+Match the reviewer to **who reads** the file you changed:
 
-To add a test, use the **`ci-testcase`** project skill (`.claude/skills/ci-testcase/SKILL.md`). To run, `cd cicd/tests && npm test [-- --suite <s>]` or use the `ci-run` skill.
+- **Human-read docs** (README, `docs/` prose): run `reviewing-phrasing` (the words)
+  + `reviewing-typography` (the look) — the human-read doc review.
+- **Agent-read tooling** (commands, skills, CLAUDE.md, rules): run
+  `reviewing-artifacts` (does it do its job — one job, complete, goal-not-spec,
+  fits the project, right for its reader).
 
-**Unit tests** live under `tests/unit/*.test.mjs` (separate from the YAML integration suite). They use Node's built-in `node:test` runner and import from compiled `dist/`. Run with `npm run test:unit` from the repo root after `npm run build`. Currently cover `parseUpstreamConfig`, `applyEnvOverrides`, and `resolveToolName` in `src/mcp/upstream-proxy.ts`.
+These are skills this project owns. Like the dev-workflow gates, they stop for a human
+and never auto-run — invoke them by hand.
 
-## Tool surface
+**Right-size it.** A typo or a one-line tweak does not need a review pass — use
+judgment. Reach for these when a change is substantial enough that the look, the
+wording, or the artifact's fitness actually matters.
 
-29 native tools across 7 categories (`device_*` mgmt, `device_settings_*`, `device_*_file`, `wifi_*`, `wifi_*_enterprise`, `network_*`, `sms_*` / `notifications_*`). Generic UI automation (`device_tap` / `device_swipe` / `device_keyevent` / `device_type_text` / `device_open_url` / `device_launch_app` / `device_list_packages` / `device_ui_dump`) was intentionally removed in #20 — compose with [`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp) for selector-based UI work and `playwright-android` for browser DOM. With `UPSTREAM_MCP=playwright=...` set, an additional 21 `browser_*` tools from `@playwright/mcp` are proxied through — **50 total**.
+---
 
-The unified namespace is the design goal: Claude Code sees one server, gets one tools/list. Don't add a feature here that exists in a mature upstream — proxy it instead. (#10 was closed and #14 implemented for exactly this reason.)
-
-## Phone CDP / browser automation
-
-`@playwright/mcp` controls **host Chromium** by default. To drive **the phone's** browser via DOM-level CDP, use **Chrome Canary on the device** — Samsung's stable Chrome is locked down and doesn't serve `/json/version`, but Canary works out of the box. See the `phone_cdp_works_on_canary` memory for the recipe.
-
-## Workflows
-
-- **Add a tool:** new method on the right `*-commands.ts` class, register in `src/server.ts` (the wrapper around `mcpServer.tool` collects names for the proxy), update README's Available Tools table, add a YAML test under `cicd/tests/testcases/<suite>/`. Use the `ci-testcase` skill to bootstrap the YAML.
-- **Add a test:** see `ci-testcase` skill.
-- **Run tests locally:** `cd cicd/tests && npm test` (smoke + everything tagged); add `--suite <s>` to scope.
-- **Issue → PR:** `dw-implement` → `dw-create-pr` → `dw-review-pr` → `dw-merge` (home-level skills, see `~/.claude/CLAUDE.md`).
-- **Always branch + PR.** Even for docs / README / CLAUDE.md / config-only changes. The home-level "direct-push for docs" exception does **not** apply in this repo — a wrong-issue-number bug shipped through a docs-only direct-push (commit `1829746`) and the PR self-review would have caught it. Branch as `fix/<slug>` or `feature/<slug>` for non-issue-tracked work.
-- **Verify factual claims before push** regardless of branch — counts, file paths, anchor links, command names, issue numbers. Run `npm run tools:count` for tool count claims. Post-push / post-merge review is a backstop, not the gate.
-
-## Conventions
-
-- Branch names: `issue-<N>-<slug>` for issue-linked work; `feature/<short-slug>` for tasks not tracked as issues.
-- Tool descriptions: short imperative, one line. The MCP client surfaces this verbatim.
-- `ensureDevice()` is called at the top of every tool that touches the device — auto-selects the only connected device or errors clearly when ambiguous.
-- Don't add features speculatively. The `auto-restart` caveat for #14 and the `portal_*` wrappers in #4 were both speculative; both were dropped or deferred when the user asked "is this an assumption?" — yes, they were.
-- **Spec sanity gate (before filing a feature issue):** (1) list the existing-tool composition that would already cover the use case; (2) name a real test scenario that needs the new work today, not someday; (3) if either is missing, defer or close. The "is this an assumption?" question is a stop-and-check signal, not something to argue past.
-- **Tool count discipline.** Whenever you add or remove a tool from `src/server.ts`, run `npm run tools:count` and update README's "**N native tools**" line in the same commit. Drift compounds quickly.
-
-## Pointers
-
-- `~/.claude/CLAUDE.md` — universal workflow rules (PR conventions, dev workflow skills)
-- `.claude/skills/ci-testcase/SKILL.md` — generate a YAML test case
-- `.claude/skills/ci-run/SKILL.md` — execute the suite
-- `README.md` — user-facing setup, tool tables, project structure
-- `cicd/tests/testcases/proxy/TC-PROXY-002.yml` — canonical example of testing a proxied tool end-to-end
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
