@@ -29,4 +29,4 @@ The team wants one phone, wired to a shared host, drivable by whoever needs it, 
 ## Status
 
 - Created: 2026-06-25
-- Issues: #94 (technical plan)
+- Issues: #94 (plan), #95 (test plan), #98 · #99 · #100 (tasks)

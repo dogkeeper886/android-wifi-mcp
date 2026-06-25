@@ -172,6 +172,19 @@ The bundled shim above needs this repo present, and `localhost` only works when 
 
 The remote and the server must share a subnet (or have a route to each other). See [`.mcp.example`](.mcp.example) for the copy-and-edit JSON config.
 
+#### Serving the whole stack for remote QA — `make serve-all`
+
+`android-wifi` is an HTTP service, but `android-playwright` and `mobile-next` are normally launched *by the client*, so a remote client can't reach the phone through them. To drive the **full** QA stack from another machine, serve all three over HTTP **on the USB host** (where the phone is):
+
+```bash
+make serve-all        # android-wifi :3000, android-playwright :8931, mobile-next :8932, + CDP bridge
+make serve-all-stop   # tear it all down
+```
+
+Each binds `0.0.0.0` (ports configurable: `PORT`, `PW_PORT`, `MOBILE_PORT`); a remote client then registers all three URLs (one `mcp-remote` entry per server). Logs land in `/tmp/android-wifi-mcp/`.
+
+> **Exposure:** all three run with **no auth** and playwright's host-check is disabled for remote access — anyone who can reach the ports can drive the phone. Keep it on a trusted network / behind a firewall. (Auth stance: [#100].)
+
 ### 5. Setup Enterprise WiFi (Optional)
 
 Skip this section if you only need WPA2/WPA3 personal networks.
