@@ -18,9 +18,9 @@ The phone-side QA story uses three cooperating MCP servers, each owning a differ
 |---|---|---|
 | **`android-wifi`** (this project) | WiFi join, network probing, OTP capture, settings, file staging | local `node dist/index.js --stdio` |
 | **`mobile-next`** ([mobile-mcp](https://github.com/mobile-next/mobile-mcp)) | OS UI driving (Settings, system dialogs, third-party apps) via the accessibility tree | `npx -y @mobilenext/mobile-mcp@latest` |
-| **`playwright-android`** | Browser DOM on the **device** (captive portals, web admin UIs) — this is `@playwright/mcp` pointed at the CDP bridge below | `npx -y @playwright/mcp@latest --cdp-endpoint http://localhost:9222` |
+| **`android-playwright`** | Browser DOM on the **device** (captive portals, web admin UIs) — this is `@playwright/mcp` pointed at the CDP bridge below | `npx -y @playwright/mcp@latest --cdp-endpoint http://localhost:9222` |
 
-> Note: `playwright-android` **is not a separate package** — it's the standard `@playwright/mcp` started with `--cdp-endpoint http://localhost:9222`, which makes it attach to whatever Chrome instance the bridge is forwarding (Canary on the device, here). If you also use `@playwright/mcp` for host-side Chromium, register it twice with different names.
+> Note: `android-playwright` **is not a separate package** — it's the standard `@playwright/mcp` started with `--cdp-endpoint http://localhost:9222`, which makes it attach to whatever Chrome instance the bridge is forwarding (Canary on the device, here). If you also use `@playwright/mcp` for host-side Chromium, register it twice with different names.
 
 Register all three:
 
@@ -32,10 +32,10 @@ claude mcp add android-wifi -- node /path/to/android-wifi-mcp/dist/index.js --st
 claude mcp add mobile-next -- npx -y @mobilenext/mobile-mcp@latest
 
 # playwright-mcp pointed at the CDP bridge (set up in the next sections)
-claude mcp add playwright-android -- npx -y @playwright/mcp@latest --cdp-endpoint http://localhost:9222
+claude mcp add android-playwright -- npx -y @playwright/mcp@latest --cdp-endpoint http://localhost:9222
 ```
 
-`claude mcp list` confirms all three are connected. `playwright-android` will report `Connected` even before the bridge is up — it lazy-connects to the CDP endpoint when a `browser_*` tool is called, so don't be misled by its startup status.
+`claude mcp list` confirms all three are connected. `android-playwright` will report `Connected` even before the bridge is up — it lazy-connects to the CDP endpoint when a `browser_*` tool is called, so don't be misled by its startup status.
 
 ## One-time device setup
 
@@ -73,7 +73,7 @@ The practical bypass: **don't navigate into the portal — let Android open it f
 1. After joining an open SSID (e.g. via this project's `wifi_connect`), Android's `CaptiveLoginActivity` automatically posts a *"Sign in to Wi-Fi network"* notification.
 2. Open the notification shade and tap the notification. With `mobile-next`: `mobile_swipe_on_screen` down from the top to expand the shade, then `mobile_list_elements_on_screen` to locate the *"Sign in to Wi-Fi network"* row, then `mobile_click_on_screen_at_coordinates` on its bounds. Chrome opens the portal in a new tab, with the cert exception pre-accepted.
 3. From the host, list pages: `curl http://localhost:9222/json` — the new portal tab shows up with a `webSocketDebuggerUrl`.
-4. From `playwright-android`, use `browser_snapshot` / `browser_click` / etc. — they attach to the existing page rather than navigating into it.
+4. From `android-playwright`, use `browser_snapshot` / `browser_click` / etc. — they attach to the existing page rather than navigating into it.
 
 This sidesteps the strict-cert path entirely. The trade-off is that you depend on Android's captive-portal detection firing — which it normally does within a few seconds of joining the SSID.
 
@@ -86,9 +86,9 @@ With all three MCPs registered and the bridge up, a captive-portal verification 
 | 1. Join the open SSID | `android-wifi` | `wifi_connect` (security: `open`) |
 | 2. Confirm the captive portal | `android-wifi` | `network_check_captive` |
 | 3. Tap the captive-portal notification | `mobile-next` | `mobile_list_elements_on_screen` → `mobile_click_on_screen_at_coordinates` |
-| 4. Drive the portal page (e.g. "Connect with WhatsApp") | `playwright-android` | `browser_snapshot` → `browser_click` |
+| 4. Drive the portal page (e.g. "Connect with WhatsApp") | `android-playwright` | `browser_snapshot` → `browser_click` |
 | 5. Wait for OTP | `android-wifi` | `notifications_wait_for_otp` |
-| 6. Enter OTP back into the portal | `playwright-android` | `browser_type` |
+| 6. Enter OTP back into the portal | `android-playwright` | `browser_type` |
 | 7. Verify connectivity | `android-wifi` | `network_check_internet` |
 
 Claude orchestrates the seven steps. No code on your side beyond registering the three servers and running `adb forward` once per session.
@@ -99,7 +99,7 @@ Claude orchestrates the seven steps. No code on your side beyond registering the
 |---|---|---|
 | `curl http://localhost:9222/json/version` returns nothing | Canary not running, or wrong app | Foreground Canary on the device; verify it's `com.chrome.canary` not stable Chrome (`com.android.chrome`) |
 | `adb forward` succeeds but the curl hangs | Stable Chrome was forwarded by accident | The socket name `localabstract:chrome_devtools_remote` is shared — only one Chrome variant should be in foreground. Force-stop the others |
-| `playwright-android` reports `Connected` in `claude mcp list` but `browser_snapshot` fails immediately on first call | Bridge or Canary not up at call time | The MCP server is connected; the CDP endpoint isn't. Run the `adb forward` command and foreground Canary, then retry the tool call |
+| `android-playwright` reports `Connected` in `claude mcp list` but `browser_snapshot` fails immediately on first call | Bridge or Canary not up at call time | The MCP server is connected; the CDP endpoint isn't. Run the `adb forward` command and foreground Canary, then retry the tool call |
 | `browser_*` calls fail with `Target page, context or browser has been closed`, even after `adb forward` is restored and `curl /json/version` returns fresh JSON | The upstream MCP cached a `Page` handle that died (typically after `wifi_disconnect` or device sleep). `adb forward` repairs the bridge but the cache is in the upstream's process memory | Call `proxy_restart {"name":"playwright"}` (assuming you registered the upstream with `name=playwright`). It kills and respawns the upstream subprocess, which reattaches to a fresh CDP target. No host restart needed |
 | Captive-portal page is blank when attached | Navigated into a strict-cert URL | Don't navigate — attach to the page Android opened via the captive-portal notification |
 

@@ -8,7 +8,7 @@ import { AdbClient } from './adb-client.js';
  * open, ui dump, package list) is intentionally not provided here — those
  * tools were removed in the option-A trim (#20). Compose with
  * `mobile-next/mobile-mcp` for selector-based UI work, and with
- * `playwright-android` (Chrome Canary CDP) for in-browser DOM. Screenshots
+ * `android-playwright` (Chrome Canary CDP) for in-browser DOM. Screenshots
  * stay in this project because they're a cheap verification primitive used
  * by our own WiFi/network/OTP flows.
  */
