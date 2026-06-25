@@ -14,7 +14,7 @@
         "@mobilenext/mobile-mcp@latest"
       ]
     },
-    "playwright-android": {
+    "android-playwright": {
       "command": "npx",
       "args": [
         "-y",

@@ -22,7 +22,7 @@ This server owns the **ADB-level control plane for QA flows**: WiFi, network pro
 |---|---|
 | Connect to WiFi (PSK / 802.1X), capture OTPs from SMS or notifications, probe captive portals, read/write Android settings, push or pull files | **`android-wifi-mcp`** (this project) |
 | Drive system Settings UI, app screens, or any selector-based UI automation | **[`mobile-next/mobile-mcp`](https://github.com/mobile-next/mobile-mcp)** — semantic accessibility-tree access (`mobile_list_elements_on_screen`), tap by computed coordinates |
-| Drive a captive-portal page, web admin UI, or anything DOM-level on the device | **[`playwright-android`](https://github.com/microsoft/playwright)** via Chrome Canary CDP — see [`docs/integrations/canary-cdp.md`](docs/integrations/canary-cdp.md) |
+| Drive a captive-portal page, web admin UI, or anything DOM-level on the device | **[`android-playwright`](https://github.com/microsoft/playwright)** via Chrome Canary CDP — see [`docs/integrations/canary-cdp.md`](docs/integrations/canary-cdp.md) |
 
 These three compose cleanly: register all three with Claude Code, and the assistant orchestrates whichever fits each step. The proxy in this server (#14) bundles `@playwright/mcp` for host-side browser DOM in the same tools/list, but mobile-mcp stays a separate registration.
 
@@ -579,7 +579,7 @@ android-wifi-mcp/
 │   ├── app/src/main/kotlin/    # Kotlin source files
 │   └── build.gradle.kts        # Gradle build config
 ├── docs/
-│   └── integrations/           # Notes on composing with mobile-mcp / playwright-android
+│   └── integrations/           # Notes on composing with mobile-mcp / android-playwright
 ├── cicd/
 │   ├── tests/                  # YAML-driven test framework (see Testing)
 │   │   ├── src/

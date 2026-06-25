@@ -821,7 +821,7 @@ export function createMcpServer(
   // Generic UI automation (taps, swipes, key events, type, app launch, URL
   // open, ui dump, package list) was removed in #20's option-A trim. Compose
   // with `mobile-next/mobile-mcp` for selector-based UI work, and with
-  // `playwright-android` (Chrome Canary CDP) for in-browser DOM. Screenshot
+  // `android-playwright` (Chrome Canary CDP) for in-browser DOM. Screenshot
   // stays here because it's a cheap verification primitive used internally by
   // our WiFi/network/OTP flows.
 

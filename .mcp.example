@@ -24,7 +24,7 @@
     "C) Client that DOES have this repo checked out (local dev): the bundled stdio shim",
     "   also works — see .mcp.json:  node bin/android-wifi-shim.mjs http://localhost:3000/mcp",
     "",
-    "mobile-next / playwright-android are separate, client-local servers and playwright's",
+    "mobile-next / android-playwright are separate, client-local servers and playwright's",
     "CDP :9222 bridge lives on the USB-connected host, so a remote client usually",
     "registers android-wifi only."
   ],
