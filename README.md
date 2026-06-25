@@ -156,6 +156,22 @@ If you didn't install globally:
 claude mcp add --transport stdio android-wifi node /path/to/android-wifi-mcp/bin/android-wifi-shim.mjs http://localhost:3000/mcp
 ```
 
+#### Remote clients (client on a different machine, without this repo)
+
+The bundled shim above needs this repo present, and `localhost` only works when the client runs **on the server host**. From another machine — with no copy of this repo — use the host's LAN IP and a codeless bridge. The server binds `0.0.0.0` (override with `HOST`) and you must open its port (default 3000) in the host firewall:
+
+- **Native-HTTP clients (Zed, Cursor, …)** — no bridge, no repo; register the URL directly:
+  ```bash
+  claude mcp add --transport http android-wifi http://<SERVER_LAN_IP>:3000/mcp
+  ```
+- **Claude Code / stdio-only clients** — its HTTP client crashes against Streamable HTTP (issue #7), so bridge stdio↔HTTP with the published [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) adapter via `npx` (no repo needed):
+  ```bash
+  claude mcp add --transport stdio android-wifi -- npx -y mcp-remote http://<SERVER_LAN_IP>:3000/mcp --allow-http
+  ```
+  The `--allow-http` flag is **required** for a plain-HTTP (non-TLS) LAN server — `mcp-remote` otherwise refuses any non-`localhost` URL ("Non-HTTPS URLs are only allowed for localhost or when --allow-http flag is provided"). Omit it only when the URL is `localhost`. (Verified against this server.)
+
+The remote and the server must share a subnet (or have a route to each other). See [`.mcp.example`](.mcp.example) for the copy-and-edit JSON config.
+
 ### 5. Setup Enterprise WiFi (Optional)
 
 Skip this section if you only need WPA2/WPA3 personal networks.
