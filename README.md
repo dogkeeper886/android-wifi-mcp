@@ -174,25 +174,22 @@ The remote and the server must share a subnet (or have a route to each other). S
 
 #### Serving the whole stack for remote QA — `make serve-all`
 
-`android-wifi` is an HTTP service, but `android-playwright` and `mobile-next` are normally launched *by the client*, so a remote client can't reach the phone through them. To drive the **full** QA stack from another machine, serve all three over HTTP **on the USB host** (where the phone is):
+`android-wifi` is an HTTP service, but `android-playwright` and `mobile-next` are normally launched *by the client*, so a remote client can't reach the phone through them. To drive the **full** QA stack from another machine, serve it over HTTP **on the USB host** (where the phone is):
 
 ```bash
-make serve-all        # android-wifi :3000, android-playwright :8931, mobile-next :8932, + CDP bridge
+make serve-all        # android-wifi :3000 (+ mobile-next proxied in), android-playwright :8931, + CDP bridge
 make serve-all-stop   # tear it all down
 ```
 
-Each binds `0.0.0.0` (ports configurable: `PORT`, `PW_PORT`, `MOBILE_PORT`); logs land in `/tmp/android-wifi-mcp/`.
+Two HTTP endpoints bind `0.0.0.0` (ports configurable: `PORT`, `PW_PORT`); logs land in `/tmp/android-wifi-mcp/`. **mobile-next** isn't a third port: it's single-session SSE over the network ([#102]), so `serve-all` runs it as a **stdio upstream of android-wifi** — its `mobile_*` UI tools surface through android-wifi's `:3000`, riding that server's multi-session Streamable HTTP.
 
-A remote client then registers **all three** — copy [`.mcp.example`](.mcp.example) and substitute the host IP. The transports differ:
+A remote client then registers just the **two** endpoints — copy [`.mcp.example`](.mcp.example) and substitute the host IP. Both speak Streamable HTTP → bridge with `mcp-remote … --allow-http` (or point a native-HTTP client straight at the URL). Registering `android-wifi` gets you its WiFi/device tools **and** mobile-next's UI tools.
 
-- **android-wifi** + **android-playwright** speak Streamable HTTP → bridge with `mcp-remote … --allow-http` (or point a native-HTTP client straight at the URL).
-- **mobile-next** speaks **SSE** and is **single-session**, so the `mcp-remote` bridge opens two connections and gets a `409` ([#102]). Use a **native SSE-capable client** pointed at `http://<SERVER_LAN_IP>:8932/mcp` (one connection); Claude Code can't bridge it today.
+**Security & exposure (decision).** The bundle is **unauthenticated by design** — both endpoints bind `0.0.0.0` with no token, and playwright's host-check is disabled for remote access, so **anyone who can reach the ports can fully drive the phone** (WiFi, OTPs, screenshots, browser, UI). This is acceptable for a **lab QA tool on a trusted network**; we deliberately don't bolt bespoke auth onto these servers. Use it safely by controlling the **network boundary**, not per-request auth:
 
-**Security & exposure (decision).** The bundle is **unauthenticated by design** — all three servers bind `0.0.0.0` with no token, and playwright's host-check is disabled for remote access, so **anyone who can reach the ports can fully drive the phone** (WiFi, OTPs, screenshots, browser, UI). This is acceptable for a **lab QA tool on a trusted network**; we deliberately don't bolt bespoke auth onto three heterogeneous servers. Use it safely by controlling the **network boundary**, not per-request auth:
-
-- Keep the host on a **trusted LAN** and open `:3000` / `:8931` / `:8932` in the firewall only to known source IPs (or not beyond the LAN at all).
+- Keep the host on a **trusted LAN** and open `:3000` / `:8931` in the firewall only to known source IPs (or not beyond the LAN at all).
 - For access across an untrusted network, put it behind a **VPN / Tailscale** and bind to that interface — never expose the ports to the public internet.
-- Only `mobile-next` supports a bearer token (`MOBILEMCP_AUTH`); `android-wifi` and `android-playwright` have none, so a token isn't a uniform control here.
+- Neither HTTP endpoint has built-in auth, so a token isn't a uniform control here — the boundary is the control.
 
 This exposure is exercised by [`TS-06`](docs/tests/TS-06-failure-exposure.md).
 
