@@ -20,12 +20,12 @@ in current best practice, leading with the few ideas worth a diagram, and true t
         │                    └─ reuses reviewing-phrasing + reviewing-typography,
         │                       then verifies every claim against the code
         ▼
-   README.md (+ docs/images/* when diagrams help)
+   README.md (+ docs/images/* — one SVG→PNG per key idea)
 ```
 
 `doc-gen-readme` opens with a mandatory **WebSearch** step so the structure tracks current
-convention rather than a frozen template. Diagrams are optional: when used, the SVG is the
-source of truth and the embedded PNG is rendered reproducibly.
+convention rather than a frozen template. It draws **one SVG→PNG diagram per key idea** it
+leads with: the SVG is the source of truth and the embedded PNG is rendered reproducibly.
 
 ## Producer → review pairing
 
