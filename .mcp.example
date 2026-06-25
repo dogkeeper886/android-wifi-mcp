@@ -1,32 +1,23 @@
 {
   "_README": [
-    "Template for connecting a client to the android-wifi MCP server.",
-    "Copy the android-wifi entry into your client's .mcp.json and replace",
-    "<SERVER_LAN_IP> with the server host's reachable IP (e.g. 192.168.6.147),",
-    "or 'localhost' if the client runs on the server host itself.",
+    "Connect a REMOTE client to the full QA stack served on the USB host via",
+    "`make serve-all` (android-wifi :3000, android-playwright :8931, mobile-next :8932).",
+    "Copy this to the client's .mcp.json and replace <SERVER_LAN_IP> with the host's",
+    "reachable IP (e.g. 192.168.6.147), or 'localhost' if the client runs on the host.",
     "",
-    "The server binds 0.0.0.0 on port 3000 (override with HOST/PORT); a remote client",
-    "must be on the same subnet / routable to the host, with the port open in the host",
-    "firewall.",
+    "The remote must share a subnet / route to the host, with those ports open in the",
+    "host firewall. All three bind 0.0.0.0 with NO auth — reachability alone grants full",
+    "phone control. Keep it on a trusted network (exposure stance: #100).",
     "",
-    "Pick the entry for your client (the example below is B, the codeless Claude Code one):",
+    "Transports differ per server:",
+    "- android-wifi + android-playwright speak Streamable HTTP -> bridge with 'mcp-remote'",
+    "  (codeless via npx; --allow-http is REQUIRED for a plain-HTTP non-localhost URL).",
+    "- mobile-next speaks SSE and is SINGLE-SESSION: mcp-remote opens two connections and",
+    "  gets a 409 (#102). Use a NATIVE SSE-capable client pointed at the URL (one",
+    "  connection), as below — Claude Code can't bridge it today.",
     "",
-    "A) Native-HTTP clients (Zed, Cursor, ...): NO bridge, NO repo needed — use the URL:",
-    "     { \"android-wifi\": { \"url\": \"http://<SERVER_LAN_IP>:3000/mcp\" } }",
-    "   or:  claude mcp add --transport http android-wifi http://<SERVER_LAN_IP>:3000/mcp",
-    "",
-    "B) Claude Code / stdio-only clients: Claude Code's HTTP client crashes against",
-    "   Streamable HTTP (issue #7), so bridge stdio<->HTTP with the published 'mcp-remote'",
-    "   adapter via npx (the entry below). This needs NO copy of this repo — just Node/npx.",
-    "   --allow-http is REQUIRED for a plain-HTTP (non-TLS) LAN server; mcp-remote refuses",
-    "   any non-localhost URL without it. Drop --allow-http only when the URL is localhost.",
-    "",
-    "C) Client that DOES have this repo checked out (local dev): the bundled stdio shim",
-    "   also works — see .mcp.json:  node bin/android-wifi-shim.mjs http://localhost:3000/mcp",
-    "",
-    "mobile-next / android-playwright are separate, client-local servers and playwright's",
-    "CDP :9222 bridge lives on the USB-connected host, so a remote client usually",
-    "registers android-wifi only."
+    "Native-HTTP clients (Zed, Cursor, ...) can skip mcp-remote and use the bare URL for",
+    "all three: { \"<name>\": { \"url\": \"http://<SERVER_LAN_IP>:<port>/mcp\" } }."
   ],
   "mcpServers": {
     "android-wifi": {
@@ -37,6 +28,18 @@
         "http://<SERVER_LAN_IP>:3000/mcp",
         "--allow-http"
       ]
+    },
+    "android-playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "http://<SERVER_LAN_IP>:8931/mcp",
+        "--allow-http"
+      ]
+    },
+    "mobile-next": {
+      "url": "http://<SERVER_LAN_IP>:8932/mcp"
     }
   }
 }

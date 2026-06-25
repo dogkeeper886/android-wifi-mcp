@@ -181,7 +181,12 @@ make serve-all        # android-wifi :3000, android-playwright :8931, mobile-nex
 make serve-all-stop   # tear it all down
 ```
 
-Each binds `0.0.0.0` (ports configurable: `PORT`, `PW_PORT`, `MOBILE_PORT`); a remote client then registers all three URLs (one `mcp-remote` entry per server). Logs land in `/tmp/android-wifi-mcp/`.
+Each binds `0.0.0.0` (ports configurable: `PORT`, `PW_PORT`, `MOBILE_PORT`); logs land in `/tmp/android-wifi-mcp/`.
+
+A remote client then registers **all three** — copy [`.mcp.example`](.mcp.example) and substitute the host IP. The transports differ:
+
+- **android-wifi** + **android-playwright** speak Streamable HTTP → bridge with `mcp-remote … --allow-http` (or point a native-HTTP client straight at the URL).
+- **mobile-next** speaks **SSE** and is **single-session**, so the `mcp-remote` bridge opens two connections and gets a `409` ([#102]). Use a **native SSE-capable client** pointed at `http://<SERVER_LAN_IP>:8932/mcp` (one connection); Claude Code can't bridge it today.
 
 > **Exposure:** all three run with **no auth** and playwright's host-check is disabled for remote access — anyone who can reach the ports can drive the phone. Keep it on a trusted network / behind a firewall. (Auth stance: [#100].)
 
