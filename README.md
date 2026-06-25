@@ -188,7 +188,13 @@ A remote client then registers **all three** — copy [`.mcp.example`](.mcp.exam
 - **android-wifi** + **android-playwright** speak Streamable HTTP → bridge with `mcp-remote … --allow-http` (or point a native-HTTP client straight at the URL).
 - **mobile-next** speaks **SSE** and is **single-session**, so the `mcp-remote` bridge opens two connections and gets a `409` ([#102]). Use a **native SSE-capable client** pointed at `http://<SERVER_LAN_IP>:8932/mcp` (one connection); Claude Code can't bridge it today.
 
-> **Exposure:** all three run with **no auth** and playwright's host-check is disabled for remote access — anyone who can reach the ports can drive the phone. Keep it on a trusted network / behind a firewall. (Auth stance: [#100].)
+**Security & exposure (decision).** The bundle is **unauthenticated by design** — all three servers bind `0.0.0.0` with no token, and playwright's host-check is disabled for remote access, so **anyone who can reach the ports can fully drive the phone** (WiFi, OTPs, screenshots, browser, UI). This is acceptable for a **lab QA tool on a trusted network**; we deliberately don't bolt bespoke auth onto three heterogeneous servers. Use it safely by controlling the **network boundary**, not per-request auth:
+
+- Keep the host on a **trusted LAN** and open `:3000` / `:8931` / `:8932` in the firewall only to known source IPs (or not beyond the LAN at all).
+- For access across an untrusted network, put it behind a **VPN / Tailscale** and bind to that interface — never expose the ports to the public internet.
+- Only `mobile-next` supports a bearer token (`MOBILEMCP_AUTH`); `android-wifi` and `android-playwright` have none, so a token isn't a uniform control here.
+
+This exposure is exercised by [`TS-06`](docs/tests/TS-06-failure-exposure.md).
 
 ### 5. Setup Enterprise WiFi (Optional)
 

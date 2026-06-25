@@ -30,4 +30,4 @@ hang), and the security exposure of the remote path is understood.
 
 | Action | Expected Result |
 |---|---|
-| From any machine that can reach the host's served ports, connect and call a device tool | It succeeds — documenting that reachability alone grants full control of the phone (WiFi, OTPs, screenshots). Records whether an auth boundary is required (open question). |
+| From any machine that can reach the host's served ports, connect and call a device tool | It succeeds — reachability alone grants full control of the phone (WiFi, OTPs, screenshots). Per the recorded decision (README "Security & exposure"), the stack is unauthenticated by design; the control is the **network boundary** (trusted LAN / VPN / firewall), so this case verifies the boundary is in place, not a per-request auth. |
