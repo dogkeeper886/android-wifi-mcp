@@ -1,6 +1,6 @@
 .PHONY: up down restart logs psql migrate migrate-down test test-unit build clean \
         doctor adb devices udev serve serve-stop serve-restart serve-all serve-all-stop \
-        setup help
+        setup readme-diagram help
 
 COMPOSE ?= docker compose
 PSQL_USER ?= mcp
@@ -123,6 +123,13 @@ serve-all-stop:
 	-@adb forward --remove tcp:$(CDP_PORT) >/dev/null 2>&1 || true
 	@echo "removed CDP forward (tcp:$(CDP_PORT))"
 	@echo "(mobile-next runs as an android-wifi child — it stops with the :$(PORT) server)"
+
+# Render the README architecture diagram: SVG (source of truth) -> PNG (embedded).
+# Needs rsvg-convert (Fedora: sudo dnf install librsvg2-tools).
+readme-diagram:
+	@command -v rsvg-convert >/dev/null 2>&1 || { echo "rsvg-convert not found -> sudo dnf install librsvg2-tools"; exit 1; }
+	rsvg-convert --zoom 2 docs/images/architecture.svg -o docs/images/architecture.png
+	@echo "rendered docs/images/architecture.png"
 
 setup:
 	@command -v adb >/dev/null 2>&1 || $(MAKE) adb

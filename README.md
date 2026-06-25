@@ -37,18 +37,9 @@ Now ask: *"list devices, scan WiFi, connect to `<ssid>`."* On Linux without root
 
 One phone is wired to one host. The **android-wifi** server runs next to it and talks `adb`; everything else is about *who can reach those tools*.
 
-```
-                                  ┌──────────────────────────────────────────────┐
-   MCP client (Claude, …)         │                  USB host                    │
-   ───────────────────────        │                                              │
-   local  ─ stdio shim ──────────►│  android-wifi  (Streamable HTTP, :3000) ──┐  │
-                                   │     │ adb (execFile, injection-safe)      │  │      ┌─────────┐
-   remote ─ mcp-remote ──HTTP─────►│     └─ mobile-next  (stdio upstream) ─────┼──┼─adb─►│ Android │
-                                   │  android-playwright (:8931) ── CDP :9222 ─┼──┼─────►│  phone  │
-   remote ─ mcp-remote ──HTTP─────►│                                           │  │      └─────────┘
-                                   │  (optional) Postgres ◄── structured logs ─┘  │
-                                   └──────────────────────────────────────────────┘
-```
+![Architecture: MCP clients reach the USB host's android-wifi (:3000, with mobile-next proxied in) and android-playwright (:8931), which drive the one Android phone over adb and CDP.](docs/images/architecture.png)
+
+<!-- Diagram source: docs/images/architecture.svg — regenerate with `make readme-diagram`. -->
 
 - **android-wifi** — the core server. HTTP-only ([Streamable HTTP](https://modelcontextprotocol.io)) on `:3000`; one selected device at a time, with multi-device selection.
 - **Upstream proxy** — android-wifi can spawn *other* MCP servers as stdio children and surface their tools as its own (`UPSTREAM_MCP`). The default adds [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp); `make serve-all` adds **mobile-next** this way.
