@@ -1,23 +1,23 @@
 {
   "_README": [
-    "Connect a REMOTE client to the full QA stack served on the USB host via",
-    "`make serve-all` (android-wifi :3000, android-playwright :8931, mobile-next :8932).",
-    "Copy this to the client's .mcp.json and replace <SERVER_LAN_IP> with the host's",
-    "reachable IP (e.g. 192.168.6.147), or 'localhost' if the client runs on the host.",
+    "Connect a REMOTE client to the QA stack served on the USB host via",
+    "`make serve-all`. Copy this to the client's .mcp.json and replace",
+    "<SERVER_LAN_IP> with the host's reachable IP (e.g. 192.168.6.147), or",
+    "'localhost' if the client runs on the host.",
     "",
-    "The remote must share a subnet / route to the host, with those ports open in the",
-    "host firewall. All three bind 0.0.0.0 with NO auth — reachability alone grants full",
-    "phone control. Keep it on a trusted network (exposure stance: #100).",
+    "Two HTTP endpoints, both Streamable HTTP -> bridge with 'mcp-remote' (codeless",
+    "via npx; --allow-http is REQUIRED for a plain-HTTP non-localhost URL):",
+    "- android-wifi :3000  — WiFi/device tools, AND mobile-next's mobile_* UI tools,",
+    "  which are proxied in as a stdio upstream (#102) so they ride android-wifi's",
+    "  multi-session HTTP instead of mobile-next's single-session SSE.",
+    "- android-playwright :8931 — device-browser tools.",
     "",
-    "Transports differ per server:",
-    "- android-wifi + android-playwright speak Streamable HTTP -> bridge with 'mcp-remote'",
-    "  (codeless via npx; --allow-http is REQUIRED for a plain-HTTP non-localhost URL).",
-    "- mobile-next speaks SSE and is SINGLE-SESSION: mcp-remote opens two connections and",
-    "  gets a 409 (#102). Use a NATIVE SSE-capable client pointed at the URL (one",
-    "  connection), as below — Claude Code can't bridge it today.",
+    "So a remote client registers just these two and gets all three servers' tools.",
+    "Native-HTTP clients (Zed, Cursor, ...) can skip mcp-remote and use the bare URL:",
+    "{ \"<name>\": { \"url\": \"http://<SERVER_LAN_IP>:<port>/mcp\" } }.",
     "",
-    "Native-HTTP clients (Zed, Cursor, ...) can skip mcp-remote and use the bare URL for",
-    "all three: { \"<name>\": { \"url\": \"http://<SERVER_LAN_IP>:<port>/mcp\" } }."
+    "Both bind 0.0.0.0 with NO auth — reachability alone grants full phone control.",
+    "Keep it on a trusted network (exposure stance: #100)."
   ],
   "mcpServers": {
     "android-wifi": {
@@ -37,9 +37,6 @@
         "http://<SERVER_LAN_IP>:8931/mcp",
         "--allow-http"
       ]
-    },
-    "mobile-next": {
-      "url": "http://<SERVER_LAN_IP>:8932/mcp"
     }
   }
 }
