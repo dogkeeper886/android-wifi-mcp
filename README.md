@@ -6,11 +6,22 @@
 ![node](https://img.shields.io/badge/node-%E2%89%A518-3c873a)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-An [MCP](https://modelcontextprotocol.io) server that turns a phone wired to a host into a programmable device. It speaks `adb` to one selected Android device and exposes **32 tools** — scan/connect WiFi (incl. 802.1X enterprise), run network diagnostics, capture SMS/notification OTPs, read/write settings, push/pull files — over Streamable HTTP. Point Claude (or any MCP client) at it and automate phone QA: connect to a captive-portal network, wait for the OTP, drive the page, tap the dialog.
+An [MCP](https://modelcontextprotocol.io) server that turns a phone wired to a host into a programmable device. It speaks `adb` to one selected Android device and exposes **32 tools** over Streamable HTTP — scan/connect WiFi (incl. 802.1X enterprise), run network diagnostics, capture SMS/notification OTPs, read/write settings, push/pull files. Point Claude (or any MCP client) at it and automate phone QA: join a captive-portal network, wait for the OTP, drive the page, tap the dialog.
 
-It also serves the **whole QA stack to a remote machine**: with one command the host publishes android-wifi *plus* the device browser (Playwright/CDP) *plus* on-device UI (mobile-next), so a tester whose laptop isn't wired to the phone can still run end-to-end flows against it.
+It also serves the **whole QA stack to a remote machine** — with one command the host publishes android-wifi *plus* the device browser *plus* on-device UI, so a tester whose laptop isn't wired to the phone can still run end-to-end flows against it.
 
----
+## How it works
+
+One phone is wired to one host. The **android-wifi** server runs next to it and talks `adb`; everything else is about *who can reach those tools* and *what else rides alongside*.
+
+![Architecture: MCP clients reach the USB host's android-wifi (:3000, with mobile-next proxied in) and android-playwright (:8931), which drive the one Android phone over adb and CDP.](docs/images/architecture.png)
+
+- **android-wifi** — the core server: HTTP-only ([Streamable HTTP](https://modelcontextprotocol.io)) on `:3000`, one selected device at a time (with multi-device selection), all `adb` via `execFile` so credentials can't be shell-injected.
+- **Upstream proxy** — android-wifi can spawn *other* MCP servers as stdio children and surface their tools as its own (`UPSTREAM_MCP`); the default adds [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp), and `make serve-all` adds **mobile-next** the same way.
+- **Remote access** — `make serve-all` publishes the stack so a remote client reaches all three servers against the one phone ([below](#remote-access-make-serve-all)).
+- **No built-in auth** — both HTTP endpoints bind `0.0.0.0`; the control is the **network boundary** ([by design](#security)).
+
+> Diagram source: [`docs/images/architecture.svg`](docs/images/architecture.svg) — regenerate with `make readme-diagram`.
 
 ## Quickstart (local, ~30 seconds)
 
@@ -21,7 +32,7 @@ make doctor          # preflight: node, adb, device, build
 make serve           # android-wifi on http://localhost:3000  (GET /health, POST /mcp)
 ```
 
-Register it with Claude Code (the bundled shim bridges stdio ↔ HTTP — Claude Code's HTTP client can't speak Streamable HTTP directly, [#7](https://github.com/dogkeeper886/android-wifi-mcp/issues/7)):
+Register it with Claude Code — the bundled shim bridges stdio ↔ HTTP, since Claude Code's HTTP client can't speak Streamable HTTP directly ([#7](https://github.com/dogkeeper886/android-wifi-mcp/issues/7)):
 
 ```bash
 claude mcp add --transport stdio android-wifi -- node bin/android-wifi-shim.mjs http://localhost:3000/mcp
@@ -29,24 +40,7 @@ claude mcp add --transport stdio android-wifi -- node bin/android-wifi-shim.mjs 
 
 Now ask: *"list devices, scan WiFi, connect to `<ssid>`."* On Linux without root-level adb access, run `make udev` once.
 
-> **Requires** Node ≥ 18, `adb`, and an **Android 11+** device (the `cmd wifi` interface). Stable Chrome's DevTools socket is locked on many OEM devices — the browser tools use **Chrome Canary** ([why](docs/integrations/canary-cdp.md)).
-
----
-
-## How it works
-
-One phone is wired to one host. The **android-wifi** server runs next to it and talks `adb`; everything else is about *who can reach those tools*.
-
-![Architecture: MCP clients reach the USB host's android-wifi (:3000, with mobile-next proxied in) and android-playwright (:8931), which drive the one Android phone over adb and CDP.](docs/images/architecture.png)
-
-<!-- Diagram source: docs/images/architecture.svg — regenerate with `make readme-diagram`. -->
-
-- **android-wifi** — the core server. HTTP-only ([Streamable HTTP](https://modelcontextprotocol.io)) on `:3000`; one selected device at a time, with multi-device selection.
-- **Upstream proxy** — android-wifi can spawn *other* MCP servers as stdio children and surface their tools as its own (`UPSTREAM_MCP`). The default adds [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp); `make serve-all` adds **mobile-next** this way.
-- **Remote access** — `make serve-all` publishes the stack so a remote client reaches all three servers against the one phone. See [Remote access](#remote-access-make-serve-all).
-- **No built-in auth** — both HTTP endpoints bind `0.0.0.0` with no token; the control is the **network boundary** (trusted LAN / VPN / firewall), [by design](#security).
-
----
+> **Requires** Node ≥ 18, `adb`, and an **Android 11+** device (the `cmd wifi` interface). The browser tools attach to **Chrome Canary** on the device — stable Chrome's DevTools socket is locked on many OEM builds ([why](docs/integrations/canary-cdp.md)).
 
 ## The tools (32 native)
 
@@ -61,11 +55,7 @@ One phone is wired to one host. The **android-wifi** server runs next to it and 
 | **Settings & files** | `device_settings_get` · `device_settings_put` · `device_settings_delete` · `device_push_file` · `device_pull_file` |
 | **Proxy** | `proxy_restart` |
 
-Modern Android ships no `curl`/`nslookup`, so network checks read `dumpsys connectivity` and `ping` (captive-portal verdict, `VALIDATED` state, interface/route info). All adb runs via `execFile` (array args, no shell) — credentials passed to `adb shell` can't be shell-injected, and secrets never appear in error text.
-
-When the Playwright upstream is attached, ~21 `browser_*` tools join the list; with mobile-next, ~23 `mobile_*` tools. Colliding names are prefixed `<upstream>__`.
-
----
+Modern Android ships no `curl`/`nslookup`, so network checks read `dumpsys connectivity` and `ping` (captive-portal verdict, `VALIDATED` state, interface/route info). When the Playwright upstream is attached, ~21 `browser_*` tools join the list; with mobile-next, ~23 `mobile_*` tools — colliding names are prefixed `<upstream>__`.
 
 ## Remote access (`make serve-all`)
 
@@ -89,8 +79,6 @@ The remote client registers **two** HTTP endpoints — copy [`.mcp.example`](.mc
 
 The bundle is **unauthenticated by design** — reachability alone grants full phone control (WiFi, OTPs, screenshots, browser, UI). That's acceptable for a **lab QA tool on a trusted network**; bolting bespoke auth onto heterogeneous servers buys less than network isolation. Keep the host on a trusted LAN, open `:3000`/`:8931` only to known source IPs (or put it behind a VPN/Tailscale), and never expose the ports to the public internet.
 
----
-
 ## Enterprise WiFi & notification OTPs (companion app)
 
 `cmd wifi` can't do 802.1X, and the shell user can't read most notifications — so a small **companion app** (`com.example.wifimcpcompanion`, Kotlin) bridges those via Android's native APIs. Build and install it once:
@@ -101,21 +89,17 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 # open the app once; for notification OTPs, tap "Grant Notification Access"
 ```
 
-Then `wifi_connect_enterprise` (PEAP/TTLS/TLS), `wifi_install_certificate`, and `notifications_wait_for_otp` work. `wifi_check_companion_app` reports install + grant status. SMS OTPs (`sms_*`) need no app, but `content://sms/inbox` is locked down on some Samsung/OEM builds — fall back to notification capture there.
-
----
+Then `wifi_connect_enterprise` (PEAP/TTLS/TLS), `wifi_install_certificate`, and `notifications_wait_for_otp` work; `wifi_check_companion_app` reports install + grant status. SMS OTPs (`sms_*`) need no app, but `content://sms/inbox` is locked down on some Samsung/OEM builds — fall back to notification capture there.
 
 ## Structured logging (optional, Postgres)
 
-Set `DATABASE_URL` and every tool call + device event is recorded (with W3C trace context, failure attribution against device attach/detach events, and secret redaction). Unset, the server runs unchanged with no Postgres.
+Set `DATABASE_URL` and every tool call + device event is recorded — with W3C trace context, failure attribution against device attach/detach events, and secret redaction. Unset, the server runs unchanged with no Postgres.
 
 ```bash
 make up && make migrate     # Postgres in Docker + schema (tool_calls, device_events, sessions)
 DATABASE_URL=postgres://mcp:mcp@localhost:5433/android_wifi_mcp npm start
 make psql                   # inspect — or use the query_log tool
 ```
-
----
 
 ## Configuration
 
@@ -128,9 +112,7 @@ make psql                   # inspect — or use the query_log tool
 | `DATABASE_URL` | — | Enables Postgres logging when set |
 | `LOG_LEVEL` / `LOG_DEST` | `info` / `stderr` | pino logging |
 
-Ports for `serve-all` (`PORT`, `PW_PORT`, `CDP_PORT`) are overridable on the `make` line. See [`.env.example`](.env.example).
-
----
+`serve-all` ports (`PORT`, `PW_PORT`, `CDP_PORT`) are overridable on the `make` line. See [`.env.example`](.env.example).
 
 ## Documentation
 
@@ -145,7 +127,7 @@ Ports for `serve-all` (`PORT`, `PW_PORT`, `CDP_PORT`) are overridable on the `ma
 make build        # tsc → dist/
 make test-unit    # fast unit tests
 make test         # full suite
-make doctor       # diagnose host / device / server state
+make readme-diagram   # re-render the architecture PNG from its SVG source
 make help         # all targets
 ```
 
