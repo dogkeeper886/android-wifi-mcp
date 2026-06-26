@@ -9,7 +9,7 @@ Target: {{input}}  (a repo path, or empty for the current repo)
 
 Turns a codebase into a README a newcomer gets in a minute. It grounds the structure in
 a fresh web search (so it tracks current convention, not a frozen template), studies the
-project for the few ideas worth leading with, optionally draws a diagram per idea, and
+project for the few ideas worth leading with, draws one SVG→PNG diagram per key idea, and
 writes the file. The producer half of the doc-workflow; its output is gated by
 `/doc-review-readme`. See `.claude/rules/doc-workflow.md`.
 
@@ -58,11 +58,15 @@ This writes the README only. It does NOT open a PR.
         │       features → quickstart → usage/config → reference → docs index → license.
         │   - Lead with the point; keep it scannable; link out rather than inline.
         │
-        ├─► Step 4: Diagrams (optional — one per key idea)
-        │   - If diagrams help, author one SVG per key idea (the editable source) and
-        │     render each to PNG for reliable rendering; embed the PNG.
+        ├─► Step 4: Diagrams — one SVG → PNG per key idea (required for the lead set)
+        │   - For EACH key idea named in Step 2 (the focused ≈3), author its OWN SVG file
+        │     in the images dir (the editable source) and render each to its OWN PNG;
+        │     embed each PNG beside the idea it explains. One idea → one .svg → one .png.
         │   - Make the render reproducible (a script / make target), not hand-exported.
         │   - Mirror any existing ASCII diagrams in docs/ so the picture matches reality.
+        │   - Right-size at Step 2 (how MANY key ideas), not here: a small project leads
+        │     with fewer ideas — but every key idea it does lead with gets its own diagram.
+        │     A truly diagram-less project names zero key ideas, never one with no picture.
         │
         ├─► Step 5: Write the README
         │   - If asked to rewrite, delete the old file and write fresh (don't patch prose).
@@ -82,8 +86,8 @@ This writes the README only. It does NOT open a PR.
 
     1. WebSearch "README best practices <year> structure badges diagrams"
     2. Study repo → key ideas: <A>, <B>, <C>
-    3. Draft structure; recommend 3 diagrams
-    4. Author docs/images/<idea>.svg → render PNG (a reproducible render step)
+    3. Draft structure; one diagram per key idea (A, B, C)
+    4. Author docs/images/{A,B,C}.svg → render each to PNG (one per key idea, reproducible)
     5. Write README.md; verify tool names / env vars / links against the code
     6. Hand off → /doc-review-readme
 
@@ -93,7 +97,9 @@ This writes the README only. It does NOT open a PR.
 
 - Reads the repo + the web; writes README.md (+ docs/images/* if diagrams). No PR.
 - The WebSearch step is mandatory — it is what keeps this command from going stale.
-- Diagrams are optional; when used, SVG is the source of truth and the PNG is rendered.
+- One SVG → PNG diagram per key idea; the SVG is the source of truth and the PNG is
+  rendered (diagram policy resolves from project-profile → Docs & diagrams).
 - Producer paired with the review `/doc-review-readme` (see .claude/rules/doc-workflow.md).
-- Right-size: a tiny project may need no diagrams; don't manufacture them.
+- Right-size at Step 2 (how many key ideas), not Step 4: every key idea you lead with
+  gets its own SVG → PNG; don't lead with ideas that don't warrant a picture.
 ```

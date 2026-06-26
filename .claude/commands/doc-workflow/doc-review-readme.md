@@ -37,6 +37,9 @@ Fits in the doc-workflow:
         │         reproducible render step (script / make target) beside them — NOT
         │         Mermaid or any inline/fenced diagram block, so they render on GitHub
         │         with no build step. Each diagram exists, renders, and matches the code.
+        │   - [ ] One SVG → PNG per key idea: every idea the README leads with has its
+        │         OWN committed .svg + rendered .png. Flag any lead idea with no diagram
+        │         (and any diagram with no .svg source) as a REVISE finding.
         │
         ├─► Step 3: Delivers for the reader
         │   - [ ] A newcomer gets what it is, why it's distinctive, and how to run it
@@ -57,8 +60,8 @@ Fits in the doc-workflow:
 
 - Reuses `reviewing-phrasing` + `reviewing-typography` (the human-read doc review) and
   adds the accuracy pass a README needs — it does not duplicate those skills.
-- Enforces what the producer promises: SVG→PNG diagrams (no Mermaid) and a README that
-  leads with the key point. If the producer's rules change, update this pass to match.
+- Enforces what the producer promises: one SVG→PNG diagram per key idea (no Mermaid) and
+  a README that leads with the key point. If the producer's rules change, update this pass.
 - Read-mostly: reads the README + the code; on REVISE, edits the README in place.
 - Review paired with the producer `/doc-gen-readme` (see .claude/rules/doc-workflow.md).
 ```

@@ -73,7 +73,7 @@ project's choice.
 ## Docs & diagrams
 
 - README output: `README.md`
-- diagram policy: SVG source committed + rendered to PNG (no Mermaid / inline diagram blocks)
+- diagram policy: one diagram per key idea — each its own SVG source committed + rendered to PNG (no Mermaid / inline diagram blocks)
 - images dir: `docs/images/` (also under Paths)
 
 ## Review semantics
