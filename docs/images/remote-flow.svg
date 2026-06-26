@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="440" viewBox="0 0 1000 440" font-family="'DejaVu Sans', 'Helvetica', sans-serif">
+  <style>
+    .title { font-size: 20px; font-weight: 700; fill: #202124; }
+    .h     { font-size: 14px; font-weight: 700; fill: #202124; }
+    .lbl   { font-size: 12.5px; fill: #3c4043; }
+    .mono  { font-family: 'DejaVu Sans Mono', monospace; font-size: 12.5px; fill: #1a73e8; font-weight: 700; }
+    .step  { font-family: 'DejaVu Sans Mono', monospace; font-size: 13px; font-weight: 700; fill: #202124; }
+    .edge  { stroke: #5f6368; stroke-width: 2; fill: none; }
+    .note  { font-size: 11.5px; fill: #5f6368; }
+  </style>
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#5f6368"/>
+    </marker>
+  </defs>
+
+  <text x="24" y="34" class="title">End-to-end remote QA flow — one agent, one phone</text>
+
+  <!-- remote client actor -->
+  <rect x="24" y="74" width="176" height="320" rx="10" fill="#e8f0fe" stroke="#4285f4"/>
+  <text x="40" y="100" class="h">Remote client</text>
+  <text x="40" y="120" class="note">(another machine,</text>
+  <text x="40" y="135" class="note">via mcp-remote)</text>
+
+  <!-- phone -->
+  <rect x="828" y="120" width="120" height="220" rx="14" fill="#f3e8fd" stroke="#a142f4"/>
+  <rect x="844" y="146" width="88" height="150" rx="4" fill="#fff" stroke="#a142f4"/>
+  <text x="888" y="140" class="h" text-anchor="middle">the one</text>
+  <text x="888" y="322" class="lbl" text-anchor="middle">phone</text>
+
+  <!-- step 1 -->
+  <text x="220" y="150" class="step">1 ·  wifi_connect</text>
+  <rect x="392" y="128" width="232" height="40" rx="8" fill="#e6f4ea" stroke="#34a853"/>
+  <text x="406" y="153" class="lbl">android-wifi</text>
+  <text x="556" y="153" class="mono">:3000</text>
+  <path class="edge" d="M624,148 H826" marker-end="url(#a)"/>
+  <text x="648" y="140" class="note">phone joins the WiFi</text>
+
+  <!-- step 2 -->
+  <text x="220" y="232" class="step">2 ·  browser_navigate</text>
+  <rect x="392" y="210" width="232" height="40" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+  <text x="406" y="235" class="lbl">android-playwright</text>
+  <text x="556" y="235" class="mono">:8931</text>
+  <path class="edge" d="M624,230 H760 V210 H826" marker-end="url(#a)"/>
+  <text x="640" y="268" class="note">device Chrome loads the captive page</text>
+
+  <!-- step 3 -->
+  <text x="220" y="314" class="step">3 ·  mobile tap</text>
+  <rect x="392" y="292" width="232" height="40" rx="8" fill="#e6f4ea" stroke="#34a853"/>
+  <text x="406" y="317" class="lbl">android-wifi · mobile_*</text>
+  <text x="556" y="317" class="mono">:3000</text>
+  <path class="edge" d="M624,312 H760 V300 H826" marker-end="url(#a)"/>
+  <text x="648" y="352" class="note">on-device dialog tapped</text>
+
+  <text x="24" y="424" class="note">Three servers, two HTTP endpoints (mobile_* is proxied through android-wifi) — every step lands on the same USB phone.</text>
+</svg>
