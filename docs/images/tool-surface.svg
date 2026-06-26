@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="400" viewBox="0 0 1000 400" font-family="'DejaVu Sans', 'Helvetica', sans-serif">
+  <style>
+    .title { font-size: 20px; font-weight: 700; fill: #202124; }
+    .h     { font-size: 14px; font-weight: 700; fill: #202124; }
+    .lbl   { font-size: 12.5px; fill: #3c4043; }
+    .mono  { font-family: 'DejaVu Sans Mono', monospace; font-size: 12px; fill: #3c4043; }
+    .port  { font-family: 'DejaVu Sans Mono', monospace; font-size: 13px; font-weight: 700; fill: #1a73e8; }
+    .edge  { stroke: #5f6368; stroke-width: 2; fill: none; }
+    .note  { font-size: 11.5px; fill: #5f6368; }
+  </style>
+  <defs>
+    <marker id="a" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L7,3 L0,6 Z" fill="#5f6368"/>
+    </marker>
+  </defs>
+
+  <text x="24" y="34" class="title">Upstream proxy — many MCP servers, one tool surface</text>
+
+  <!-- sources -->
+  <rect x="24" y="80" width="320" height="58" rx="8" fill="#e6f4ea" stroke="#34a853"/>
+  <text x="40" y="104" class="h">android-wifi (native)</text>
+  <text x="40" y="125" class="mono">32 tools — wifi_* device_* network_* sms_* …</text>
+
+  <rect x="24" y="166" width="320" height="58" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+  <text x="40" y="190" class="h">@playwright/mcp</text>
+  <text x="40" y="211" class="mono">stdio upstream — ~21 browser_*</text>
+
+  <rect x="24" y="252" width="320" height="58" rx="8" fill="#e0f7fa" stroke="#00acc1"/>
+  <text x="40" y="276" class="h">mobile-next</text>
+  <text x="40" y="297" class="mono">stdio upstream — ~23 mobile_*</text>
+
+  <!-- proxy / merge -->
+  <rect x="430" y="150" width="200" height="90" rx="10" fill="#f1f3f4" stroke="#5f6368"/>
+  <text x="530" y="186" class="h" text-anchor="middle">upstream proxy</text>
+  <text x="530" y="208" class="note" text-anchor="middle">merges tools/list +</text>
+  <text x="530" y="223" class="note" text-anchor="middle">tools/call routing</text>
+
+  <!-- edges sources -> proxy -->
+  <path class="edge" d="M344,109 H392 V178 H428" marker-end="url(#a)"/>
+  <path class="edge" d="M344,195 H428" marker-end="url(#a)"/>
+  <path class="edge" d="M344,281 H392 V212 H428" marker-end="url(#a)"/>
+
+  <!-- output -->
+  <rect x="710" y="150" width="266" height="90" rx="10" fill="#e8f0fe" stroke="#4285f4"/>
+  <text x="726" y="180" class="h">one tools/list</text>
+  <text x="900" y="180" class="port">:3000</text>
+  <text x="726" y="202" class="lbl">the client sees one server,</text>
+  <text x="726" y="221" class="lbl">~76 tools — no upstreams to wire</text>
+
+  <path class="edge" d="M630,195 H706" marker-end="url(#a)"/>
+
+  <text x="24" y="358" class="note">Upstreams are spawned as stdio children (UPSTREAM_MCP). On a name collision the upstream tool is prefixed `&lt;upstream&gt;__`.</text>
+  <text x="24" y="378" class="note">So a remote client connects to android-wifi alone and gets WiFi/device + browser + on-device UI tools together.</text>
+</svg>

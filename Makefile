@@ -124,12 +124,11 @@ serve-all-stop:
 	@echo "removed CDP forward (tcp:$(CDP_PORT))"
 	@echo "(mobile-next runs as an android-wifi child — it stops with the :$(PORT) server)"
 
-# Render the README architecture diagram: SVG (source of truth) -> PNG (embedded).
-# Needs rsvg-convert (Fedora: sudo dnf install librsvg2-tools).
+# Render every README diagram: each SVG (source of truth) -> its own PNG (embedded).
+# One diagram per key idea; needs rsvg-convert (Fedora: sudo dnf install librsvg2-tools).
 readme-diagram:
 	@command -v rsvg-convert >/dev/null 2>&1 || { echo "rsvg-convert not found -> sudo dnf install librsvg2-tools"; exit 1; }
-	rsvg-convert --zoom 2 docs/images/architecture.svg -o docs/images/architecture.png
-	@echo "rendered docs/images/architecture.png"
+	@for svg in docs/images/*.svg; do rsvg-convert --zoom 2 "$$svg" -o "$${svg%.svg}.png" && echo "rendered $${svg%.svg}.png"; done
 
 setup:
 	@command -v adb >/dev/null 2>&1 || $(MAKE) adb

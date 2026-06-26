@@ -17,11 +17,11 @@ One phone is wired to one host. The **android-wifi** server runs next to it and 
 ![Architecture: MCP clients reach the USB host's android-wifi (:3000, with mobile-next proxied in) and android-playwright (:8931), which drive the one Android phone over adb and CDP.](docs/images/architecture.png)
 
 - **android-wifi** — the core server: HTTP-only ([Streamable HTTP](https://modelcontextprotocol.io)) on `:3000`, one selected device at a time (with multi-device selection), all `adb` via `execFile` so credentials can't be shell-injected.
-- **Upstream proxy** — android-wifi can spawn *other* MCP servers as stdio children and surface their tools as its own (`UPSTREAM_MCP`); the default adds [`@playwright/mcp`](https://github.com/microsoft/playwright-mcp), and `make serve-all` adds **mobile-next** the same way.
-- **Remote access** — `make serve-all` publishes the stack so a remote client reaches all three servers against the one phone ([below](#remote-access-make-serve-all)).
 - **No built-in auth** — both HTTP endpoints bind `0.0.0.0`; the control is the **network boundary** ([by design](#security)).
 
-> Diagram source: [`docs/images/architecture.svg`](docs/images/architecture.svg) — regenerate with `make readme-diagram`.
+Two ideas make the stack more than a single server — each gets its own picture below: **[one tool surface](#the-tools)** (how other MCP servers fold in) and the **[end-to-end remote flow](#remote-access-make-serve-all)** (how a remote machine drives all of it).
+
+> Diagram sources live in [`docs/images/`](docs/images/) (`*.svg`) — regenerate the PNGs with `make readme-diagram`.
 
 ## Quickstart (local, ~30 seconds)
 
@@ -42,7 +42,11 @@ Now ask: *"list devices, scan WiFi, connect to `<ssid>`."* On Linux without root
 
 > **Requires** Node ≥ 18, `adb`, and an **Android 11+** device (the `cmd wifi` interface). The browser tools attach to **Chrome Canary** on the device — stable Chrome's DevTools socket is locked on many OEM builds ([why](docs/integrations/canary-cdp.md)).
 
-## The tools (32 native)
+## The tools
+
+android-wifi registers **32 native tools**. Beyond those, its **upstream proxy** spawns *other* MCP servers as stdio children and merges their tools into one list — so a client connects to android-wifi alone and gets WiFi/device **+** browser **+** on-device UI together:
+
+![One tool surface: android-wifi native (32) plus @playwright/mcp (~21 browser_*) and mobile-next (~23 mobile_*) stdio upstreams merge through the upstream proxy into one tools/list on :3000.](docs/images/tool-surface.png)
 
 | Group | Tools |
 |-------|-------|
@@ -55,11 +59,13 @@ Now ask: *"list devices, scan WiFi, connect to `<ssid>`."* On Linux without root
 | **Settings & files** | `device_settings_get` · `device_settings_put` · `device_settings_delete` · `device_push_file` · `device_pull_file` |
 | **Proxy** | `proxy_restart` |
 
-Modern Android ships no `curl`/`nslookup`, so network checks read `dumpsys connectivity` and `ping` (captive-portal verdict, `VALIDATED` state, interface/route info). When the Playwright upstream is attached, ~21 `browser_*` tools join the list; with mobile-next, ~23 `mobile_*` tools — colliding names are prefixed `<upstream>__`.
+Modern Android ships no `curl`/`nslookup`, so network checks read `dumpsys connectivity` and `ping` (captive-portal verdict, `VALIDATED` state, interface/route info). Colliding upstream tool names are prefixed `<upstream>__`.
 
 ## Remote access (`make serve-all`)
 
-To drive the **full** stack from another machine, serve it on the host where the phone is:
+To drive the **full** stack from another machine, serve it on the host where the phone is — then one remote agent runs an end-to-end flow against the one phone:
+
+![End-to-end remote QA flow: a remote client calls wifi_connect (android-wifi :3000), browser_navigate (android-playwright :8931), then a mobile tap (mobile_* via :3000) — each step landing on the same USB phone.](docs/images/remote-flow.png)
 
 ```bash
 make serve-all        # android-wifi :3000 (+ mobile-next proxied in), android-playwright :8931, + CDP bridge
@@ -73,7 +79,7 @@ The remote client registers **two** HTTP endpoints — copy [`.mcp.example`](.mc
 "android-playwright": { "command": "npx", "args": ["-y","mcp-remote","http://<HOST_IP>:8931/mcp","--allow-http"] }
 ```
 
-**mobile-next isn't a third port.** It's single-session SSE over the network ([#102](https://github.com/dogkeeper886/android-wifi-mcp/issues/102)), so `serve-all` runs it as a **stdio upstream of android-wifi** — its `mobile_*` UI tools ride android-wifi's multi-session `:3000`. Registering android-wifi gets you both WiFi/device *and* mobile UI tools. (For a single-client local run, [`.mcp.json`](.mcp.json) registers all three as separate stdio servers instead.)
+**mobile-next isn't a third port.** It's single-session SSE over the network ([#102](https://github.com/dogkeeper886/android-wifi-mcp/issues/102)), so `serve-all` runs it as a **stdio upstream of android-wifi** — its `mobile_*` tools ride android-wifi's multi-session `:3000`. (For a single-client local run, [`.mcp.json`](.mcp.json) registers all three as separate stdio servers instead.)
 
 ### Security
 
@@ -127,7 +133,7 @@ make psql                   # inspect — or use the query_log tool
 make build        # tsc → dist/
 make test-unit    # fast unit tests
 make test         # full suite
-make readme-diagram   # re-render the architecture PNG from its SVG source
+make readme-diagram   # re-render every diagram PNG from its SVG source
 make help         # all targets
 ```
 
