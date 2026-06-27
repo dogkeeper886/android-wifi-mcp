@@ -72,7 +72,7 @@ make serve-all        # android-wifi :3000 (+ mobile-next proxied in), android-p
 make serve-all-stop   # tear it all down
 ```
 
-The remote client registers **two** HTTP endpoints — copy [`.mcp.example`](.mcp.example) and substitute the host IP. Both speak Streamable HTTP, bridged codelessly with [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (`--allow-http` is required for a plain-HTTP LAN URL):
+The remote client registers **two** HTTP endpoints — copy [`.mcp.json.example`](.mcp.json.example) and substitute the host IP. Both speak Streamable HTTP, bridged codelessly with [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) (`--allow-http` is required for a plain-HTTP LAN URL):
 
 ```jsonc
 "android-wifi":       { "command": "npx", "args": ["-y","mcp-remote","http://<HOST_IP>:3000/mcp","--allow-http"] },
