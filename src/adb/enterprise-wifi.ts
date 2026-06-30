@@ -103,8 +103,14 @@ export class EnterpriseWifiCommands {
     const POLL_INTERVAL_MS = 500;
     const deadline = Date.now() + timeoutMs;
     while (true) {
-      const status = await wifi.getStatus();
-      if (status.connected && status.ssid === ssid) return true;
+      try {
+        const status = await wifi.getStatus();
+        if (status.connected && status.ssid === ssid) return true;
+      } catch {
+        // adb hiccup / transient device drop mid-poll — treat as not-yet-
+        // associated and keep polling to the deadline, so connectEnterprise
+        // still returns its structured result rather than throwing.
+      }
       if (Date.now() >= deadline) return false;
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     }
