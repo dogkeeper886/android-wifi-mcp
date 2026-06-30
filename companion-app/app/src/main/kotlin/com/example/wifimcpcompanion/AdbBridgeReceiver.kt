@@ -3,6 +3,7 @@ package com.example.wifimcpcompanion
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
@@ -68,7 +69,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         val ssid = config.getString("ssid")
         val eapMethod = config.getString("eapMethod")
         val identity = config.getString("identity")
-        val domainSuffixMatch = config.getString("domainSuffixMatch")
+        val domainSuffixMatch = config.optString("domainSuffixMatch", "")
+        val trustOnFirstUse = config.optBoolean("trustOnFirstUse", false)
         val password = config.optString("password", null)
         val phase2Method = config.optString("phase2Method", "mschapv2")
         val anonymousIdentity = config.optString("anonymousIdentity", null)
@@ -76,6 +78,16 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         val clientCertificate = config.optString("clientCertificate", null)
         val privateKey = config.optString("privateKey", null)
         val privateKeyPassword = config.optString("privateKeyPassword", null)
+
+        if (trustOnFirstUse && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+            writeResult(
+                context,
+                false,
+                "trustOnFirstUse requires Android 13+ (API 33); this device is API ${Build.VERSION.SDK_INT}. Provide caCertificate and/or domainSuffixMatch instead.",
+                mapOf("action" to "connect_enterprise", "ssid" to ssid, "eapMethod" to eapMethod)
+            )
+            return
+        }
 
         val wifiManager = WifiEnterpriseManager(context)
 
@@ -87,7 +99,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                 domain = domainSuffixMatch,
                 caCertPem = caCertificate,
                 anonymousIdentity = anonymousIdentity,
-                phase2Method = wifiManager.getPhase2Method(phase2Method)
+                phase2Method = wifiManager.getPhase2Method(phase2Method),
+                trustOnFirstUse = trustOnFirstUse
             )
             "ttls" -> wifiManager.connectTtls(
                 ssid = ssid,
@@ -96,7 +109,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                 domain = domainSuffixMatch,
                 caCertPem = caCertificate,
                 anonymousIdentity = anonymousIdentity,
-                phase2Method = wifiManager.getPhase2Method(phase2Method)
+                phase2Method = wifiManager.getPhase2Method(phase2Method),
+                trustOnFirstUse = trustOnFirstUse
             )
             "tls" -> {
                 if (clientCertificate == null || privateKey == null) {
@@ -115,7 +129,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                     clientCertPem = clientCertificate,
                     privateKeyPem = privateKey,
                     privateKeyPassword = privateKeyPassword,
-                    caCertPem = caCertificate
+                    caCertPem = caCertificate,
+                    trustOnFirstUse = trustOnFirstUse
                 )
             }
             else -> {

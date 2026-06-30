@@ -47,6 +47,11 @@ export class EnterpriseWifiCommands {
       };
     }
 
+    const validationError = serverValidationError(config);
+    if (validationError) {
+      return { success: false, ssid: config.ssid, eapMethod: config.eapMethod, error: validationError };
+    }
+
     if (!(await this.isCompanionAppInstalled())) {
       return {
         success: false,
@@ -222,6 +227,23 @@ export function applyVerification(
     associated: false,
     error: `Suggestion accepted but the device did not associate to "${base.ssid}" within ${Math.round(timeoutMs / 1000)}s — it may be out of range, awaiting first-run user approval, or rejected during the EAP handshake.`,
   };
+}
+
+/**
+ * Validate the server-certificate stance before forwarding (#69/#71). Android
+ * 11+ rejects an enterprise config that has neither server validation nor
+ * trust-on-first-use, so surface a clear, actionable error here instead of the
+ * framework's cryptic one. A pinned CA with no domain is valid (#71); TOFU
+ * needs neither a CA nor a domain.
+ */
+export function serverValidationError(config: EapConfig): string | null {
+  if (config.trustOnFirstUse) return null;
+  const hasCa = !!config.caCertificate;
+  const hasDomain = !!config.domainSuffixMatch && config.domainSuffixMatch.trim() !== '';
+  if (!hasCa && !hasDomain) {
+    return 'Enterprise WiFi on Android 11+ requires server-certificate validation. Set trustOnFirstUse: true for a lab/test AP (Android 13+), or provide caCertificate and/or domainSuffixMatch.';
+  }
+  return null;
 }
 
 function normalizeCertificateResult(

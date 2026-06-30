@@ -45,7 +45,8 @@ class WifiEnterpriseManager(private val context: Context) {
         domain: String,
         caCertPem: String? = null,
         anonymousIdentity: String? = null,
-        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2
+        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2,
+        trustOnFirstUse: Boolean = false
     ): ConnectionResult {
         return try {
             val enterpriseConfig = WifiEnterpriseConfig().apply {
@@ -55,13 +56,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 this.password = password
                 anonymousIdentity?.let { this.anonymousIdentity = it }
 
-                // CA certificate (required for Android 11+)
-                caCertPem?.let {
-                    caCertificate = parseCertificate(it)
-                }
-
-                // Domain suffix match (required for security)
-                setDomainSuffixMatch(domain)
+                applyServerValidation(domain, caCertPem, trustOnFirstUse)
             }
 
             addNetworkSuggestion(ssid, enterpriseConfig, "peap")
@@ -86,7 +81,8 @@ class WifiEnterpriseManager(private val context: Context) {
         domain: String,
         caCertPem: String? = null,
         anonymousIdentity: String? = null,
-        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2
+        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2,
+        trustOnFirstUse: Boolean = false
     ): ConnectionResult {
         return try {
             val enterpriseConfig = WifiEnterpriseConfig().apply {
@@ -96,11 +92,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 this.password = password
                 anonymousIdentity?.let { this.anonymousIdentity = it }
 
-                caCertPem?.let {
-                    caCertificate = parseCertificate(it)
-                }
-
-                setDomainSuffixMatch(domain)
+                applyServerValidation(domain, caCertPem, trustOnFirstUse)
             }
 
             addNetworkSuggestion(ssid, enterpriseConfig, "ttls")
@@ -125,7 +117,8 @@ class WifiEnterpriseManager(private val context: Context) {
         clientCertPem: String,
         privateKeyPem: String,
         privateKeyPassword: String? = null,
-        caCertPem: String? = null
+        caCertPem: String? = null,
+        trustOnFirstUse: Boolean = false
     ): ConnectionResult {
         return try {
             val clientCert = parseCertificate(clientCertPem)
@@ -138,11 +131,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 // Set client certificate and private key
                 setClientKeyEntry(privateKey, clientCert)
 
-                caCertPem?.let {
-                    caCertificate = parseCertificate(it)
-                }
-
-                setDomainSuffixMatch(domain)
+                applyServerValidation(domain, caCertPem, trustOnFirstUse)
             }
 
             addNetworkSuggestion(ssid, enterpriseConfig, "tls")
@@ -155,6 +144,31 @@ class WifiEnterpriseManager(private val context: Context) {
                 error = e.message ?: "Unknown error"
             )
         }
+    }
+
+    /**
+     * Apply the server-certificate stance to this config (#69 / #71):
+     * - trustOnFirstUse (API 33+): pin the server cert on first connect — set NO
+     *   CA and NO domain. The Builder's mandatory-validation gate is satisfied by
+     *   TOFU, and WifiConfigManager rejects TOFU together with a CA cert (#73), so
+     *   setting either makes the suggestion permanently un-materializable.
+     * - otherwise: pin the CA when supplied, and match the domain only when it is
+     *   non-empty (a pinned CA with no domain is valid, #71).
+     *
+     * The API-33 floor for TOFU is enforced up front by AdbBridgeReceiver, which
+     * returns a clear error below it; the version guard here is defensive.
+     */
+    private fun WifiEnterpriseConfig.applyServerValidation(
+        domain: String,
+        caCertPem: String?,
+        trustOnFirstUse: Boolean
+    ) {
+        if (trustOnFirstUse && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            enableTrustOnFirstUse(true)
+            return
+        }
+        caCertPem?.let { caCertificate = parseCertificate(it) }
+        if (domain.isNotEmpty()) setDomainSuffixMatch(domain)
     }
 
     /**

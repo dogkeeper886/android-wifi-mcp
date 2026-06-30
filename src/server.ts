@@ -544,7 +544,8 @@ export function createMcpServer(
       ssid: z.string().describe('Network SSID'),
       eapMethod: z.enum(['peap', 'ttls', 'tls']).describe('EAP method'),
       identity: z.string().describe('Username or email for authentication'),
-      domainSuffixMatch: z.string().describe('RADIUS server domain (e.g., radius.corp.com)'),
+      domainSuffixMatch: z.string().optional().describe('RADIUS server domain to match (e.g. radius.corp.com). Optional when caCertificate or trustOnFirstUse is set.'),
+      trustOnFirstUse: z.boolean().optional().describe('Android 13+ only: pin the server certificate on first connect, for lab/test APs with no CA on hand and no known RADIUS domain. Allows omitting both caCertificate and domainSuffixMatch.'),
       phase2Method: z
         .enum(['mschapv2', 'pap', 'gtc', 'none'])
         .optional()
@@ -571,6 +572,7 @@ export function createMcpServer(
         password: params.password,
         anonymousIdentity: params.anonymousIdentity,
         domainSuffixMatch: params.domainSuffixMatch,
+        trustOnFirstUse: params.trustOnFirstUse,
         caCertificate: params.caCertificate,
         clientCertificate: params.clientCertificate,
         privateKey: params.privateKey,
