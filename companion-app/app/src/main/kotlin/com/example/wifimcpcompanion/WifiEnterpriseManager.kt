@@ -45,8 +45,7 @@ class WifiEnterpriseManager(private val context: Context) {
         domain: String,
         caCertPem: String? = null,
         anonymousIdentity: String? = null,
-        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2,
-        trustOnFirstUse: Boolean = false
+        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2
     ): ConnectionResult {
         return try {
             val enterpriseConfig = WifiEnterpriseConfig().apply {
@@ -56,7 +55,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 this.password = password
                 anonymousIdentity?.let { this.anonymousIdentity = it }
 
-                applyServerValidation(domain, caCertPem, trustOnFirstUse)
+                applyServerValidation(domain, caCertPem)
             }
 
             addNetworkSuggestion(ssid, enterpriseConfig, "peap")
@@ -81,8 +80,7 @@ class WifiEnterpriseManager(private val context: Context) {
         domain: String,
         caCertPem: String? = null,
         anonymousIdentity: String? = null,
-        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2,
-        trustOnFirstUse: Boolean = false
+        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2
     ): ConnectionResult {
         return try {
             val enterpriseConfig = WifiEnterpriseConfig().apply {
@@ -92,7 +90,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 this.password = password
                 anonymousIdentity?.let { this.anonymousIdentity = it }
 
-                applyServerValidation(domain, caCertPem, trustOnFirstUse)
+                applyServerValidation(domain, caCertPem)
             }
 
             addNetworkSuggestion(ssid, enterpriseConfig, "ttls")
@@ -117,8 +115,7 @@ class WifiEnterpriseManager(private val context: Context) {
         clientCertPem: String,
         privateKeyPem: String,
         privateKeyPassword: String? = null,
-        caCertPem: String? = null,
-        trustOnFirstUse: Boolean = false
+        caCertPem: String? = null
     ): ConnectionResult {
         return try {
             val clientCert = parseCertificate(clientCertPem)
@@ -131,7 +128,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 // Set client certificate and private key
                 setClientKeyEntry(privateKey, clientCert)
 
-                applyServerValidation(domain, caCertPem, trustOnFirstUse)
+                applyServerValidation(domain, caCertPem)
             }
 
             addNetworkSuggestion(ssid, enterpriseConfig, "tls")
@@ -147,27 +144,27 @@ class WifiEnterpriseManager(private val context: Context) {
     }
 
     /**
-     * Apply the server-certificate stance to this config (#69 / #71):
-     * - trustOnFirstUse (API 33+): pin the server cert on first connect — set NO
-     *   CA and NO domain. The Builder's mandatory-validation gate is satisfied by
-     *   TOFU, and WifiConfigManager rejects TOFU together with a CA cert (#73), so
-     *   setting either makes the suggestion permanently un-materializable.
-     * - otherwise: pin the CA when supplied, and match the domain only when it is
-     *   non-empty (a pinned CA with no domain is valid, #71).
-     *
-     * The API-33 floor for TOFU is enforced up front by AdbBridgeReceiver, which
-     * returns a clear error below it; the version guard here is defensive.
+     * Apply the server-certificate stance to this config (#71): pin the CA when
+     * supplied, and match the domain only when it is non-empty (a pinned CA with
+     * no domain is valid, #71). Android 11+ requires at least one of these.
      */
     private fun WifiEnterpriseConfig.applyServerValidation(
         domain: String,
-        caCertPem: String?,
-        trustOnFirstUse: Boolean
+        caCertPem: String?
     ) {
-        if (trustOnFirstUse && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            enableTrustOnFirstUse(true)
-            return
+        caCertPem?.let { pem ->
+            // The PEM may carry a full chain of CAs (intermediates + a self-signed
+            // root). OpenSSL on the device must terminate at a self-signed root, so a
+            // single pinned intermediate is not enough when the RADIUS presents only
+            // leaf + intermediate — pin all of them via setCaCertificates (API 31+).
+            val cas = parseCertificates(pem)
+            when {
+                cas.isEmpty() -> {}
+                cas.size == 1 -> caCertificate = cas[0]
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> setCaCertificates(cas.toTypedArray())
+                else -> caCertificate = cas.last()
+            }
         }
-        caCertPem?.let { caCertificate = parseCertificate(it) }
         if (domain.isNotEmpty()) setDomainSuffixMatch(domain)
     }
 
@@ -232,11 +229,14 @@ class WifiEnterpriseManager(private val context: Context) {
      * Remove network suggestion for an SSID
      */
     fun removeNetworkSuggestion(ssid: String): Boolean {
-        val suggestion = WifiNetworkSuggestion.Builder()
-            .setSsid(ssid)
-            .build()
-
-        val status = wifiManager.removeNetworkSuggestions(listOf(suggestion))
+        // Android matches suggestions for removal by full equality (SSID +
+        // security + enterprise config), which can't be rebuilt from an SSID
+        // alone — an SSID-only builder never matches an enterprise suggestion.
+        // The companion holds one enterprise network at a time, so clear the
+        // app's suggestions wholesale: an empty list removes every suggestion
+        // this app added. This also stops a stale suggestion from competing
+        // during the next auto-join. (`ssid` is kept for call-site clarity.)
+        val status = wifiManager.removeNetworkSuggestions(emptyList())
         return status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS
     }
 
@@ -252,6 +252,16 @@ class WifiEnterpriseManager(private val context: Context) {
         val decoded = Base64.getDecoder().decode(cleanedPem)
         val certFactory = CertificateFactory.getInstance("X.509")
         return certFactory.generateCertificate(ByteArrayInputStream(decoded)) as X509Certificate
+    }
+
+    /**
+     * Parse a PEM that may contain one or more X.509 certificates (a CA chain).
+     */
+    private fun parseCertificates(pemData: String): List<X509Certificate> {
+        val certFactory = CertificateFactory.getInstance("X.509")
+        return pemData.byteInputStream().use { stream ->
+            certFactory.generateCertificates(stream).filterIsInstance<X509Certificate>()
+        }
     }
 
     /**

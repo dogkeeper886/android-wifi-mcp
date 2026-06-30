@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.wifimcpcompanion"
         minSdk = 30  // Android 11+ required for enterprise WiFi
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1.0"  // adds trust-on-first-use (#69)
+        versionCode = 3
+        versionName = "1.2.0"  // full-chain CA + disconnect/forget; drop non-functional TOFU
     }
 
     buildTypes {

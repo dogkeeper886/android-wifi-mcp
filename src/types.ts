@@ -66,9 +66,8 @@ export interface EapConfig {
   identity: string;                  // Username/email
   password?: string;                 // For PEAP/TTLS
   anonymousIdentity?: string;        // Outer identity (optional)
-  domainSuffixMatch?: string;        // Server domain to match; optional when caCertificate or trustOnFirstUse is set
-  trustOnFirstUse?: boolean;         // Android 13+: pin the server cert on first connect (lab/test APs with no CA/domain)
-  caCertificate?: string;            // Base64-encoded PEM or file path
+  domainSuffixMatch?: string;        // Server domain to match; optional when caCertificate is set
+  caCertificate?: string;            // PEM CA cert(s): a single cert, or a full chain (intermediates + self-signed root) for a public RADIUS cert
   clientCertificate?: string;        // Base64-encoded PEM (for EAP-TLS)
   privateKey?: string;               // Base64-encoded PEM (for EAP-TLS)
   privateKeyPassword?: string;       // If private key is encrypted

@@ -10,3 +10,6 @@ cicd/tests/dist/
 
 # @playwright/mcp scratch (when used as an upstream)
 .playwright-mcp/
+
+# Lab enterprise-WiFi certs/keys (secrets — never commit)
+lab-certs/

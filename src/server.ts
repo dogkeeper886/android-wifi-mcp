@@ -544,8 +544,7 @@ export function createMcpServer(
       ssid: z.string().describe('Network SSID'),
       eapMethod: z.enum(['peap', 'ttls', 'tls']).describe('EAP method'),
       identity: z.string().describe('Username or email for authentication'),
-      domainSuffixMatch: z.string().optional().describe('RADIUS server domain to match (e.g. radius.corp.com). Optional when caCertificate or trustOnFirstUse is set.'),
-      trustOnFirstUse: z.boolean().optional().describe('Android 13+ only: pin the server certificate on first connect, for lab/test APs with no CA on hand and no known RADIUS domain. Allows omitting both caCertificate and domainSuffixMatch.'),
+      domainSuffixMatch: z.string().optional().describe('RADIUS server domain to match (e.g. radius.corp.com). Optional when caCertificate is set.'),
       phase2Method: z
         .enum(['mschapv2', 'pap', 'gtc', 'none'])
         .optional()
@@ -553,7 +552,7 @@ export function createMcpServer(
         .describe('Phase 2 authentication method (for PEAP/TTLS)'),
       password: z.string().optional().describe('Password (required for PEAP/TTLS)'),
       anonymousIdentity: z.string().optional().describe('Anonymous outer identity'),
-      caCertificate: z.string().optional().describe('CA certificate (base64-encoded PEM)'),
+      caCertificate: z.string().optional().describe('CA certificate, PEM. May be a full chain (intermediates + a self-signed root) — needed when the RADIUS uses a public cert and presents only leaf + intermediate.'),
       clientCertificate: z.string().optional().describe('Client certificate for EAP-TLS (base64-encoded PEM)'),
       privateKey: z.string().optional().describe('Private key for EAP-TLS (base64-encoded PEM)'),
       privateKeyPassword: z.string().optional().describe('Private key password (if encrypted)'),
@@ -572,7 +571,6 @@ export function createMcpServer(
         password: params.password,
         anonymousIdentity: params.anonymousIdentity,
         domainSuffixMatch: params.domainSuffixMatch,
-        trustOnFirstUse: params.trustOnFirstUse,
         caCertificate: params.caCertificate,
         clientCertificate: params.clientCertificate,
         privateKey: params.privateKey,
@@ -619,6 +617,44 @@ export function createMcpServer(
           isError: true,
         };
       }
+    }
+  );
+
+  mcpServer.tool(
+    'wifi_disconnect_enterprise',
+    "Forget enterprise WiFi: remove the companion's network suggestion(s) so the device stops auto-joining and no stale suggestion competes next time. Android removes the app's suggestions as a set, so this clears the companion's enterprise network. Requires companion app.",
+    {
+      ssid: z.string().describe('Network SSID being forgotten (for intent/logging; the companion clears its enterprise suggestion set)'),
+    },
+    async ({ ssid }) => {
+      await ensureDevice();
+      const enterpriseWifi = new EnterpriseWifiCommands(deviceManager.getAdbClient());
+
+      const result = await enterpriseWifi.disconnectEnterprise(ssid);
+
+      if (result.success) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                { success: true, ssid: result.ssid, message: 'Enterprise network suggestion removed' },
+                null,
+                2
+              ),
+            },
+          ],
+        };
+      }
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ success: false, ssid: result.ssid, error: result.error }, null, 2),
+          },
+        ],
+        isError: true,
+      };
     }
   );
 
