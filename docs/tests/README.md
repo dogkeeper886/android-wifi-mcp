@@ -4,7 +4,10 @@ Each file is one **scenario** (`TS-NN`) from a reviewed `[STORY-XXX] Test Plan`
 issue. Produced by `qw-cases`, gated by `qw-review-cases`, then handed to the
 project's binding + run layer (e.g. bound to `cicd/tests` YAML + MCP tools).
 
-- One file per scenario: `docs/tests/TS-NN-<slug>.md`.
+- One file per scenario, under a **per-story subfolder**: `docs/tests/STORY-XXX/TS-NN-<slug>.md`.
+  `TS-NN` **restarts per story** (each story's folder owns its own TS-01, TS-02, …);
+  the `story` front-matter field + the folder disambiguate. Ad-hoc tests (no story) go
+  under a named subfolder, `docs/tests/<subject>/TS-NN-<slug>.md`.
 - A scenario holds one or more **cases** (`TC-NN`), each a **Steps table** of
   *Action* / *Expected Result* rows.
 - Steps describe **observable outcomes**, not exact commands/strings — a case
