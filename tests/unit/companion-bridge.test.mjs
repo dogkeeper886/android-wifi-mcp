@@ -142,7 +142,9 @@ test('normalize: success=true returns success with no error', async () => {
     resultFileContent: JSON.stringify({ success: true, ssid: 'TestSSID', eapMethod: 'peap' }),
   });
   const ent = new EnterpriseWifiCommands(fake);
-  const result = await ent.connectEnterprise(validPeapConfig());
+  // verify:false isolates normalization (the suggestion-accepted path) from the
+  // #70 association poll, which is covered by enterprise-verify.test.mjs.
+  const result = await ent.connectEnterprise({ ...validPeapConfig(), verify: false });
 
   assert.equal(result.success, true);
   assert.equal(result.error, undefined);
