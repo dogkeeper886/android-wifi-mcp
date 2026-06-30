@@ -35,3 +35,4 @@ The result is a feature that looks like it works but can't be relied on for the 
 
 - Created: 2026-06-30
 - Issues: #69, #70, #71, #72 (technical breakdown; #73 closed — folded into #69)
+- Test plan: #109 → test docs in `docs/tests/STORY-002/` (TS-01..05)
