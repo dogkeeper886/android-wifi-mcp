@@ -1,5 +1,6 @@
 import { AdbClient } from './adb-client.js';
 import { CompanionAppBridge, COMPANION_PACKAGE } from './companion-bridge.js';
+import { WifiCommands } from './wifi-commands.js';
 import {
   EapConfig,
   EapMethod,
@@ -79,7 +80,34 @@ export class EnterpriseWifiCommands {
       };
     }
 
-    return normalizeEnterpriseResult(raw, config.ssid, config.eapMethod);
+    const result = normalizeEnterpriseResult(raw, config.ssid, config.eapMethod);
+
+    // The suggestion API is fire-and-forget: a success above means the OS
+    // ACCEPTED the config, not that the device associated (#70). Unless the
+    // caller opts out (verify: false), poll for real L2 association — the same
+    // host-side approach proven for PSK wifi_connect (#65), so no companion change.
+    if (!result.success || config.verify === false) return result;
+    const timeoutMs = config.verifyTimeoutMs ?? 30_000;
+    const associated = await this.pollAssociation(result.ssid, timeoutMs);
+    return applyVerification(result, associated, timeoutMs);
+  }
+
+  /**
+   * Poll for real L2 association to `ssid` after a suggestion is accepted.
+   * Time-based, with no terminal early-bail: the OS schedules suggestion
+   * materialization asynchronously, so an early DISCONNECTED is normal rather
+   * than a failure (avoids #91's class of premature bail).
+   */
+  private async pollAssociation(ssid: string, timeoutMs: number): Promise<boolean> {
+    const wifi = new WifiCommands(this.adb);
+    const POLL_INTERVAL_MS = 500;
+    const deadline = Date.now() + timeoutMs;
+    while (true) {
+      const status = await wifi.getStatus();
+      if (status.connected && status.ssid === ssid) return true;
+      if (Date.now() >= deadline) return false;
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+    }
   }
 
   /**
@@ -166,6 +194,27 @@ function normalizeEnterpriseResult(
         ? raw.eapMethod
         : fallbackEapMethod,
     error: success ? undefined : pickErrorMessage(raw),
+  };
+}
+
+/**
+ * Shape the result after an association poll. With verify on, `success` reflects
+ * whether the device actually associated — not merely that the OS accepted the
+ * suggestion — so a reported success is never a false positive (#70).
+ */
+export function applyVerification(
+  base: EnterpriseConnectionResult,
+  associated: boolean,
+  timeoutMs: number
+): EnterpriseConnectionResult {
+  if (associated) {
+    return { ...base, associated: true };
+  }
+  return {
+    ...base,
+    success: false,
+    associated: false,
+    error: `Suggestion accepted but the device did not associate to "${base.ssid}" within ${Math.round(timeoutMs / 1000)}s — it may be out of range, awaiting first-run user approval, or rejected during the EAP handshake.`,
   };
 }
 

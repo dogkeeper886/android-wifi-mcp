@@ -556,6 +556,8 @@ export function createMcpServer(
       clientCertificate: z.string().optional().describe('Client certificate for EAP-TLS (base64-encoded PEM)'),
       privateKey: z.string().optional().describe('Private key for EAP-TLS (base64-encoded PEM)'),
       privateKeyPassword: z.string().optional().describe('Private key password (if encrypted)'),
+      verify: z.boolean().optional().default(true).describe('Poll for actual association after the suggestion is accepted; a success then means the device is on the SSID, not just that the config was accepted. Set false for the old fire-and-forget behaviour.'),
+      verifyTimeoutMs: z.number().int().optional().default(30000).describe('How long to wait for association when verify is true (ms, default 30000)'),
     },
     async (params) => {
       await ensureDevice();
@@ -573,6 +575,8 @@ export function createMcpServer(
         clientCertificate: params.clientCertificate,
         privateKey: params.privateKey,
         privateKeyPassword: params.privateKeyPassword,
+        verify: params.verify,
+        verifyTimeoutMs: params.verifyTimeoutMs,
       });
 
       if (result.success) {

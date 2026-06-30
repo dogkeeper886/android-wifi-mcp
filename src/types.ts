@@ -71,12 +71,15 @@ export interface EapConfig {
   clientCertificate?: string;        // Base64-encoded PEM (for EAP-TLS)
   privateKey?: string;               // Base64-encoded PEM (for EAP-TLS)
   privateKeyPassword?: string;       // If private key is encrypted
+  verify?: boolean;                  // Poll for actual association after the suggestion is accepted (default true)
+  verifyTimeoutMs?: number;          // How long to wait for association (default 30000)
 }
 
 export interface EnterpriseConnectionResult {
   success: boolean;
   ssid: string;
   eapMethod: EapMethod;
+  associated?: boolean;              // Set when verify ran: true = on the SSID, false = accepted but did not associate
   error?: string;
 }
 
