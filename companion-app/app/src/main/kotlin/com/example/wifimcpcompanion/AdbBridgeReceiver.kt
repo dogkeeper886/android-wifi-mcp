@@ -270,7 +270,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
 
         if (ssid != null) {
             val wifiManager = WifiEnterpriseManager(context)
-            val removed = wifiManager.removeNetworkSuggestion(ssid)
+            val removed = wifiManager.clearAllSuggestions()
 
             writeResult(
                 context,
