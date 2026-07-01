@@ -63,7 +63,14 @@ export class CompanionAppBridge {
    */
   async sendBroadcastAndWait(action: string, payload?: object): Promise<BridgeResponse> {
     if (payload !== undefined) {
-      await this.writeCommandFile(payload);
+      const writeError = await this.writeCommandFile(payload);
+      if (writeError) {
+        // A silently-ignored write failure here is exactly what turned a bad
+        // command file into a 30 s result-poll timeout (#115). Fail fast with
+        // the real reason instead — the companion would otherwise read a stale
+        // or missing file and never write a result.
+        return { raw: null, broadcastError: `Failed to write command file: ${writeError}` };
+      }
     }
     await this.clearResultFile();
 
@@ -82,13 +89,21 @@ export class CompanionAppBridge {
    * Write `payload` as JSON into the companion app's filesDir.
    * Payload is base64-encoded so embedded JSON quotes / cert hyphens cannot
    * break shell escaping.
+   *
+   * Returns an error string when the write fails (`run-as` denied, redirect
+   * failed, oversized payload), or `undefined` on success. The caller must not
+   * broadcast on failure — see {@link sendBroadcastAndWait}.
    */
-  private async writeCommandFile(payload: object): Promise<void> {
+  private async writeCommandFile(payload: object): Promise<string | undefined> {
     const json = JSON.stringify(payload);
     const b64 = Buffer.from(json, 'utf-8').toString('base64');
-    await this.adb.shell(
+    const result = await this.adb.shell(
       `run-as ${COMPANION_PACKAGE} sh -c 'echo ${b64} | base64 -d > ${COMMAND_FILE_REL}'`
     );
+    if (!result.success) {
+      return result.stderr || result.stdout || 'Unknown error';
+    }
+    return undefined;
   }
 
   private async clearResultFile(): Promise<void> {
