@@ -1,0 +1,28 @@
+id: TC-WIFI-003
+name: wifi_connect to an open network means associated
+suite: wifi
+tags: [wifi, connect]
+priority: 3
+timeout: 90000
+dependencies: []
+
+steps:
+  - name: Connect to the open test network
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_connect '{"ssid":"{{TEST_SSID_OPEN}}","security":"open"}'
+    expectPatterns:
+      - "success.*true"
+      - "{{TEST_SSID_OPEN}}"
+    rejectPatterns:
+      - "isError"
+  - name: Confirm association out of band
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
+    expectPatterns:
+      - "connected.*true"
+      - "{{TEST_SSID_OPEN}}"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  wifi_connect associates to an open (no-password) network, confirmed via wifi_status.
+  The added network is forgotten by the runner's snapshot/restore. Needs TEST_SSID_OPEN
+  and a real open AP.

@@ -1,0 +1,21 @@
+id: TC-SMK-015
+name: network_dns_lookup resolves a hostname to an address
+suite: smoke
+tags: [smoke, network]
+priority: 15
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Resolve a known-resolvable hostname
+    command: npx tsx cicd/tests/src/mcp-client.ts network_dns_lookup '{"hostname":"example.com"}'
+    expectPatterns:
+      - "example.com"
+      - "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  network_dns_lookup returns at least one IP address for a resolvable hostname — the
+  IPv4 expect is the real guard (an empty {addresses: []} result has no dotted-quad to
+  match, so it fails). Assumes the device has internet (as the smoke suite does).

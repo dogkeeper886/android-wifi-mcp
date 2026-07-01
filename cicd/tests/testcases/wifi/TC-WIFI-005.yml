@@ -1,0 +1,40 @@
+id: TC-WIFI-005
+name: wifi_forget removes a saved network
+suite: wifi
+tags: [wifi, forget]
+priority: 5
+timeout: 90000
+dependencies: [TC-WIFI-002]
+
+steps:
+  - name: Connect to the WPA2 test network (creates a saved entry)
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_connect '{"ssid":"{{TEST_SSID_WPA2}}","security":"wpa2","password":"{{TEST_SSID_WPA2_PASSWORD}}"}'
+    expectPatterns:
+      - "success.*true"
+    rejectPatterns:
+      - "isError"
+  - name: Find the saved network's id
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_list_networks '{}'
+    expectPatterns:
+      - "{{TEST_SSID_WPA2}}"
+    rejectPatterns:
+      - "isError"
+    capture:
+      NETID: "networks[ssid={{TEST_SSID_WPA2}}].networkId"
+  - name: Forget it
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_forget '{"networkId":{{NETID}}}'
+    expectPatterns:
+      - "Forgot network"
+    rejectPatterns:
+      - "isError"
+  - name: The saved list no longer contains it
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_list_networks '{}'
+    rejectPatterns:
+      - "isError"
+      - "{{TEST_SSID_WPA2}}"
+
+criteria: |
+  wifi_forget removes a saved network by id (captured from wifi_list_networks), confirmed
+  by the SSID being absent from the saved list afterward. Needs TEST_SSID_WPA2(+_PASSWORD)
+  and a real AP. TEST_SSID_WPA2 must not contain a dot or regex metacharacters — the
+  capture path splits on "." and the SSID is used verbatim in patterns.

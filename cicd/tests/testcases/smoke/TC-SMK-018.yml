@@ -1,0 +1,29 @@
+id: TC-SMK-018
+name: device_select selects a device by serial
+suite: smoke
+tags: [smoke, device]
+priority: 18
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: List devices, capture the first serial
+    command: npx tsx cicd/tests/src/mcp-client.ts device_list '{}'
+    expectPatterns:
+      - "serial"
+    rejectPatterns:
+      - "isError"
+    capture:
+      SER: "devices[state=device].serial"
+  - name: Select that device by serial
+    command: npx tsx cicd/tests/src/mcp-client.ts device_select '{"serial":"{{SER}}"}'
+    expectPatterns:
+      - "Selected device"
+      - "{{SER}}"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  device_select accepts a serial (captured from device_list) and confirms the selection,
+  echoing the serial and the device model. Single-device coverage; multi-device selection
+  (a second serial) is device-gated.

@@ -1,0 +1,29 @@
+id: TC-WIFI-004
+name: wifi_disconnect issues a clean disconnect
+suite: wifi
+tags: [wifi, disconnect]
+priority: 4
+timeout: 90000
+dependencies: [TC-WIFI-002]
+
+steps:
+  - name: Ensure connected to the WPA2 test network
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_connect '{"ssid":"{{TEST_SSID_WPA2}}","security":"wpa2","password":"{{TEST_SSID_WPA2_PASSWORD}}"}'
+    expectPatterns:
+      - "success.*true"
+    rejectPatterns:
+      - "isError"
+  - name: Disconnect (toggle mode)
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_disconnect '{"mode":"toggle"}'
+    expectPatterns:
+      - "Disconnected from WiFi network"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  wifi_disconnect (toggle mode) issues a clean disconnect and returns
+  "Disconnected from WiFi network". Note: toggle bounces the radio and Android
+  auto-rejoins the saved network, so this verifies the tool runs cleanly, not a
+  persistent disconnect — a not-connected assertion would be flaky by design (use
+  mode "forget" to stay off). The saved network is left for snapshot/restore to forget.
+  Needs TEST_SSID_WPA2(+_PASSWORD) and a real AP.

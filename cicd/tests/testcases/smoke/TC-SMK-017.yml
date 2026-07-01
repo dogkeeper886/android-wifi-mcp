@@ -1,0 +1,19 @@
+id: TC-SMK-017
+name: device_event_log returns the attach/detach transition ring
+suite: smoke
+tags: [smoke, device]
+priority: 17
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Read recent device transitions
+    command: npx tsx cicd/tests/src/mcp-client.ts device_event_log '{"limit":8}'
+    expectPatterns:
+      - "events"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  device_event_log returns the in-memory transition ring (an events array, possibly
+  empty). Confirms the tool responds cleanly; the ring is populated by the observer.

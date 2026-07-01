@@ -1,0 +1,23 @@
+id: TC-LOG-001
+name: query_log returns structured tool-call rows
+suite: logging
+tags: [logging]
+priority: 1
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Query recent tool calls
+    command: npx tsx cicd/tests/src/mcp-client.ts query_log '{"limit":5}'
+    expectPatterns:
+      - "total_matched"
+      - "calls"
+    rejectPatterns:
+      - "isError"
+      - "DATABASE_URL is unset"
+
+criteria: |
+  query_log returns rows from the structured-logging tables. Requires DATABASE_URL
+  (Postgres — `make up` + `make migrate`); without it the tool returns a note instead of
+  rows, so this case is gated to the `logging` suite and only run where Postgres is up.
+  (to-be) until wired into CI with a database.

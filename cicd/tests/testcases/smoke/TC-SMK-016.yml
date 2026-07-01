@@ -1,0 +1,22 @@
+id: TC-SMK-016
+name: network_ping reaches a live host
+suite: smoke
+tags: [smoke, network]
+priority: 16
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Ping a known-reachable host
+    command: npx tsx cicd/tests/src/mcp-client.ts network_ping '{"host":"8.8.8.8","count":3}'
+    expectPatterns:
+      - "8.8.8.8"
+      - "alive.*true"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  network_ping reaches a known-reachable host. The tool returns alive=true only when the
+  ping got replies (alive is set to !"100% packet loss"), so "alive.*true" is the
+  reachability guard — it fails plainly when the host is unreachable. Assumes the device
+  has internet (as the smoke suite does).
