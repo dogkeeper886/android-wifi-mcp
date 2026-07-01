@@ -10,9 +10,11 @@ steps:
   - name: Query recent tool calls
     command: npx tsx cicd/tests/src/mcp-client.ts query_log '{"limit":5}'
     expectPatterns:
-      - '"rows"'
+      - '"calls"'
+      - '"total_matched"'
     rejectPatterns:
       - "isError"
+      - "DATABASE_URL is unset"
 
 criteria: |
   query_log returns rows from the structured-logging tables. Requires DATABASE_URL
