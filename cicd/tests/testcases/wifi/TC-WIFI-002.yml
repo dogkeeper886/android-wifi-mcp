@@ -1,0 +1,30 @@
+id: TC-WIFI-002
+name: wifi_connect to WPA2 means associated, not just accepted
+suite: wifi
+tags: [wifi, connect]
+priority: 2
+timeout: 90000
+dependencies: []
+
+steps:
+  - name: Connect to the WPA2 test network
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_connect '{"ssid":"{{TEST_SSID_WPA2}}","security":"wpa2","password":"{{TEST_SSID_WPA2_PASSWORD}}"}'
+    expectPatterns:
+      - "success.*true"
+      - "{{TEST_SSID_WPA2}}"
+    rejectPatterns:
+      - "isError"
+      - "success.*false"
+  - name: Confirm association out of band
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
+    expectPatterns:
+      - "connected.*true"
+      - "{{TEST_SSID_WPA2}}"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  A reported success from wifi_connect means the device is actually associated to the
+  target SSID — confirmed independently via wifi_status (connected true, matching SSID),
+  not assumed from "configuration accepted". The network added here is forgotten by the
+  runner's snapshot/restore after the test. Needs TEST_SSID_WPA2(+_PASSWORD) and a real AP.

@@ -1,0 +1,45 @@
+id: TC-WIFI-001
+name: wifi_enable / wifi_disable toggle the radio, verified via status
+suite: wifi
+tags: [wifi, radio]
+priority: 1
+timeout: 60000
+dependencies: []
+
+steps:
+  - name: Enable WiFi
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_enable '{}'
+    expectPatterns:
+      - "enabled successfully|enable command sent"
+    rejectPatterns:
+      - "isError"
+  - name: Status reports enabled
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
+    expectPatterns:
+      - "enabled.*true"
+    rejectPatterns:
+      - "isError"
+  - name: Disable WiFi
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_disable '{}'
+    expectPatterns:
+      - "disabled successfully|disable command sent"
+    rejectPatterns:
+      - "isError"
+  - name: Status reports disabled
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
+    expectPatterns:
+      - "enabled.*false"
+    rejectPatterns:
+      - "isError"
+  - name: Re-enable WiFi (leave the device as found)
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_enable '{}'
+    expectPatterns:
+      - "enabled successfully|enable command sent"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  wifi_enable and wifi_disable change the radio state, each confirmed by reading
+  wifi_status out of band (enabled true, then false). The device is re-enabled at
+  the end; the runner's snapshot/restore also restores the original enabled state.
+  Needs a device; no access point required.

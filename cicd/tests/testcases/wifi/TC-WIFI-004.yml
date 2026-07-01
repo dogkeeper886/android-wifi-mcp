@@ -1,0 +1,31 @@
+id: TC-WIFI-004
+name: wifi_disconnect drops the active association
+suite: wifi
+tags: [wifi, disconnect]
+priority: 4
+timeout: 90000
+dependencies: [TC-WIFI-002]
+
+steps:
+  - name: Ensure connected to the WPA2 test network
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_connect '{"ssid":"{{TEST_SSID_WPA2}}","security":"wpa2","password":"{{TEST_SSID_WPA2_PASSWORD}}"}'
+    expectPatterns:
+      - "success.*true"
+    rejectPatterns:
+      - "isError"
+  - name: Disconnect (toggle — keeps the saved network)
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_disconnect '{"mode":"toggle"}'
+    expectPatterns:
+      - "Disconnected from WiFi network"
+    rejectPatterns:
+      - "isError"
+  - name: Status reports not connected to that SSID
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
+    rejectPatterns:
+      - "isError"
+      - "connected.*true"
+
+criteria: |
+  wifi_disconnect in toggle mode drops the active association, confirmed via wifi_status
+  (no longer connected). The saved network is left for snapshot/restore to forget.
+  Needs TEST_SSID_WPA2(+_PASSWORD) and a real AP.
