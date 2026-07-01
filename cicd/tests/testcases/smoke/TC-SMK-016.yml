@@ -11,11 +11,12 @@ steps:
     command: npx tsx cicd/tests/src/mcp-client.ts network_ping '{"host":"8.8.8.8","count":3}'
     expectPatterns:
       - "8.8.8.8"
-      - "packetLoss"
+      - "alive.*true"
     rejectPatterns:
       - "isError"
-      - '"packetLoss": 100'
 
 criteria: |
-  network_ping reaches a known-reachable host and reports packet loss below 100%.
-  Assumes the device has internet (as the smoke suite does).
+  network_ping reaches a known-reachable host. The tool returns alive=true only when the
+  ping got replies (alive is set to !"100% packet loss"), so "alive.*true" is the
+  reachability guard — it fails plainly when the host is unreachable. Assumes the device
+  has internet (as the smoke suite does).

@@ -10,8 +10,8 @@ steps:
   - name: Query recent tool calls
     command: npx tsx cicd/tests/src/mcp-client.ts query_log '{"limit":5}'
     expectPatterns:
-      - '"calls"'
-      - '"total_matched"'
+      - "total_matched"
+      - "calls"
     rejectPatterns:
       - "isError"
       - "DATABASE_URL is unset"

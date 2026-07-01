@@ -36,4 +36,5 @@ steps:
 criteria: |
   wifi_forget removes a saved network by id (captured from wifi_list_networks), confirmed
   by the SSID being absent from the saved list afterward. Needs TEST_SSID_WPA2(+_PASSWORD)
-  and a real AP.
+  and a real AP. TEST_SSID_WPA2 must not contain a dot or regex metacharacters — the
+  capture path splits on "." and the SSID is used verbatim in patterns.

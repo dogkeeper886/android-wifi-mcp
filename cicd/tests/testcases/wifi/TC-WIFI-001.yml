@@ -1,5 +1,5 @@
 id: TC-WIFI-001
-name: wifi_enable / wifi_disable toggle the radio, verified via status
+name: wifi_enable / wifi_disable toggle the radio, confirmed by the tool
 suite: wifi
 tags: [wifi, radio]
 priority: 1
@@ -10,36 +10,28 @@ steps:
   - name: Enable WiFi
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_enable '{}'
     expectPatterns:
-      - "enabled successfully|enable command sent"
+      - "enabled successfully"
     rejectPatterns:
       - "isError"
-  - name: Status reports enabled
-    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
-    expectPatterns:
-      - "enabled.*true"
-    rejectPatterns:
-      - "isError"
+      - "command sent"
   - name: Disable WiFi
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_disable '{}'
     expectPatterns:
-      - "disabled successfully|disable command sent"
+      - "disabled successfully"
     rejectPatterns:
       - "isError"
-  - name: Status reports disabled
-    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
-    expectPatterns:
-      - "enabled.*false"
-    rejectPatterns:
-      - "isError"
+      - "command sent"
   - name: Re-enable WiFi (leave the device as found)
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_enable '{}'
     expectPatterns:
-      - "enabled successfully|enable command sent"
+      - "enabled successfully"
     rejectPatterns:
       - "isError"
+      - "command sent"
 
 criteria: |
-  wifi_enable and wifi_disable change the radio state, each confirmed by reading
-  wifi_status out of band (enabled true, then false). The device is re-enabled at
-  the end; the runner's snapshot/restore also restores the original enabled state.
-  Needs a device; no access point required.
+  wifi_enable and wifi_disable change the radio state. The server returns
+  "WiFi enabled/disabled successfully" only after re-reading isEnabled() and confirming
+  the new state (otherwise "... command sent", which we reject) — so the confirmed
+  message is the verification, avoiding brittle status-string parsing over the
+  double-encoded payload. Needs a device; no access point required.

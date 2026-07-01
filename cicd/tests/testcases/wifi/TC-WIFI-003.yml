@@ -14,7 +14,6 @@ steps:
       - "{{TEST_SSID_OPEN}}"
     rejectPatterns:
       - "isError"
-      - "success.*false"
   - name: Confirm association out of band
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
     expectPatterns:

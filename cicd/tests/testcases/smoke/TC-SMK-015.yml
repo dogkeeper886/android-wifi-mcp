@@ -14,8 +14,8 @@ steps:
       - "[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+"
     rejectPatterns:
       - "isError"
-      - '"addresses": \[\]'
 
 criteria: |
-  network_dns_lookup returns at least one IP address for a resolvable hostname — a real
-  result, not an empty response. Assumes the device has internet (as the smoke suite does).
+  network_dns_lookup returns at least one IP address for a resolvable hostname — the
+  IPv4 expect is the real guard (an empty {addresses: []} result has no dotted-quad to
+  match, so it fails). Assumes the device has internet (as the smoke suite does).

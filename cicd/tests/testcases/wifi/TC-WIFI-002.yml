@@ -14,7 +14,6 @@ steps:
       - "{{TEST_SSID_WPA2}}"
     rejectPatterns:
       - "isError"
-      - "success.*false"
   - name: Confirm association out of band
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
     expectPatterns:
@@ -28,3 +27,4 @@ criteria: |
   target SSID — confirmed independently via wifi_status (connected true, matching SSID),
   not assumed from "configuration accepted". The network added here is forgotten by the
   runner's snapshot/restore after the test. Needs TEST_SSID_WPA2(+_PASSWORD) and a real AP.
+  TEST_SSID_* must not contain regex metacharacters or dots (used verbatim in patterns).

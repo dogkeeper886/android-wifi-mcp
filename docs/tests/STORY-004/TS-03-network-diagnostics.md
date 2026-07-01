@@ -15,10 +15,11 @@ status: green
 real result for a real target — a resolved address, a reachable host — not just a
 well-shaped empty response.
 
-Cases are **(to-be)** until the runnable binding ships (#131). Targets come from
-`TEST_DNS_HOSTNAME` / `TEST_PING_HOST`.
+TC-01 and TC-03 ship as `TC-SMK-015`/`TC-SMK-016` in the smoke suite and run wherever
+the device has internet (targets are hardcoded public hosts — `example.com`, `8.8.8.8`).
+TC-02 is **(to-be)** — no binding yet.
 
-## TC-01 — dns lookup resolves a hostname (to-be)
+## TC-01 — dns lookup resolves a hostname
 
 | Action | Expected Result |
 |---|---|
@@ -30,7 +31,7 @@ Cases are **(to-be)** until the runnable binding ships (#131). Targets come from
 |---|---|
 | Resolve a name that does not exist | The result reports resolution failure clearly — not a crash, not a false address |
 
-## TC-03 — ping reaches a live host (to-be)
+## TC-03 — ping reaches a live host
 
 | Action | Expected Result |
 |---|---|
