@@ -47,6 +47,11 @@ export class EnterpriseWifiCommands {
       };
     }
 
+    const validationError = serverValidationError(config);
+    if (validationError) {
+      return { success: false, ssid: config.ssid, eapMethod: config.eapMethod, error: validationError };
+    }
+
     if (!(await this.isCompanionAppInstalled())) {
       return {
         success: false,
@@ -90,6 +95,32 @@ export class EnterpriseWifiCommands {
     const timeoutMs = config.verifyTimeoutMs ?? 30_000;
     const associated = await this.pollAssociation(result.ssid, timeoutMs);
     return applyVerification(result, associated, timeoutMs);
+  }
+
+  /**
+   * Forget an enterprise network: remove the companion's WifiNetworkSuggestion
+   * for `ssid`. Stale suggestions otherwise linger and compete during auto-join
+   * — a previously-added SSID can win over the one you just asked for.
+   */
+  async disconnectEnterprise(ssid: string): Promise<{ success: boolean; ssid: string; error?: string }> {
+    if (!(await this.isCompanionAppInstalled())) {
+      return { success: false, ssid, error: `Companion app not installed. Please install ${COMPANION_PACKAGE}` };
+    }
+
+    const payload = { action: 'disconnect', timestamp: Date.now(), ssid };
+    const { raw, broadcastError } = await this.bridge.sendBroadcastAndWait('DISCONNECT', payload);
+
+    if (broadcastError) {
+      return { success: false, ssid, error: `Failed to send broadcast: ${broadcastError}` };
+    }
+    if (!raw) {
+      return { success: false, ssid, error: 'Timeout waiting for disconnect result' };
+    }
+    return {
+      success: !!raw.success,
+      ssid: typeof raw.ssid === 'string' ? raw.ssid : ssid,
+      error: raw.success ? undefined : pickErrorMessage(raw),
+    };
   }
 
   /**
@@ -222,6 +253,21 @@ export function applyVerification(
     associated: false,
     error: `Suggestion accepted but the device did not associate to "${base.ssid}" within ${Math.round(timeoutMs / 1000)}s — it may be out of range, awaiting first-run user approval, or rejected during the EAP handshake.`,
   };
+}
+
+/**
+ * Validate the server-certificate stance before forwarding (#71). Android 11+
+ * rejects an enterprise config that has no server validation, so surface a
+ * clear, actionable error here instead of the framework's cryptic one. A pinned
+ * CA with no domain is valid (#71).
+ */
+export function serverValidationError(config: EapConfig): string | null {
+  const hasCa = !!config.caCertificate;
+  const hasDomain = !!config.domainSuffixMatch && config.domainSuffixMatch.trim() !== '';
+  if (!hasCa && !hasDomain) {
+    return 'Enterprise WiFi on Android 11+ requires server-certificate validation. Provide caCertificate and/or domainSuffixMatch.';
+  }
+  return null;
 }
 
 function normalizeCertificateResult(

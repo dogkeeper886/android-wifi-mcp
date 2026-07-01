@@ -68,7 +68,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         val ssid = config.getString("ssid")
         val eapMethod = config.getString("eapMethod")
         val identity = config.getString("identity")
-        val domainSuffixMatch = config.getString("domainSuffixMatch")
+        val domainSuffixMatch = config.optString("domainSuffixMatch", "")
         val password = config.optString("password", null)
         val phase2Method = config.optString("phase2Method", "mschapv2")
         val anonymousIdentity = config.optString("anonymousIdentity", null)
@@ -270,7 +270,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
 
         if (ssid != null) {
             val wifiManager = WifiEnterpriseManager(context)
-            val removed = wifiManager.removeNetworkSuggestion(ssid)
+            val removed = wifiManager.clearAllSuggestions()
 
             writeResult(
                 context,

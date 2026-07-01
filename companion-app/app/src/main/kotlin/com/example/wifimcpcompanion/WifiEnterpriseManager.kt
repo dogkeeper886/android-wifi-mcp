@@ -55,13 +55,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 this.password = password
                 anonymousIdentity?.let { this.anonymousIdentity = it }
 
-                // CA certificate (required for Android 11+)
-                caCertPem?.let {
-                    caCertificate = parseCertificate(it)
-                }
-
-                // Domain suffix match (required for security)
-                setDomainSuffixMatch(domain)
+                applyServerValidation(domain, caCertPem)
             }
 
             addNetworkSuggestion(ssid, enterpriseConfig, "peap")
@@ -96,11 +90,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 this.password = password
                 anonymousIdentity?.let { this.anonymousIdentity = it }
 
-                caCertPem?.let {
-                    caCertificate = parseCertificate(it)
-                }
-
-                setDomainSuffixMatch(domain)
+                applyServerValidation(domain, caCertPem)
             }
 
             addNetworkSuggestion(ssid, enterpriseConfig, "ttls")
@@ -138,11 +128,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 // Set client certificate and private key
                 setClientKeyEntry(privateKey, clientCert)
 
-                caCertPem?.let {
-                    caCertificate = parseCertificate(it)
-                }
-
-                setDomainSuffixMatch(domain)
+                applyServerValidation(domain, caCertPem)
             }
 
             addNetworkSuggestion(ssid, enterpriseConfig, "tls")
@@ -158,6 +144,36 @@ class WifiEnterpriseManager(private val context: Context) {
     }
 
     /**
+     * Apply the server-certificate stance to this config (#71): pin the CA when
+     * supplied, and match the domain only when it is non-empty (a pinned CA with
+     * no domain is valid, #71). Android 11+ requires at least one of these.
+     */
+    private fun WifiEnterpriseConfig.applyServerValidation(
+        domain: String,
+        caCertPem: String?
+    ) {
+        caCertPem?.takeIf { it.isNotBlank() }?.let { pem ->
+            // The PEM may carry a full chain of CAs (intermediates + a self-signed
+            // root). OpenSSL on the device must terminate at a self-signed root, so a
+            // single pinned intermediate is not enough when the RADIUS presents only
+            // leaf + intermediate — pin all of them via setCaCertificates (API 31+).
+            val cas = parseCertificates(pem)
+            when {
+                cas.isEmpty() -> throw IllegalArgumentException(
+                    "caCertificate was provided but no X.509 certificate could be parsed from it (expected PEM)."
+                )
+                cas.size == 1 -> caCertificate = cas[0]
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> setCaCertificates(cas.toTypedArray())
+                else -> throw IllegalArgumentException(
+                    "Pinning a multi-certificate CA chain requires Android 12+ (API 31); this device is API " +
+                        "${Build.VERSION.SDK_INT}. Provide a single CA certificate instead."
+                )
+            }
+        }
+        if (domain.isNotEmpty()) setDomainSuffixMatch(domain)
+    }
+
+    /**
      * Add network suggestion using WifiNetworkSuggestion API
      */
     private fun addNetworkSuggestion(
@@ -165,8 +181,9 @@ class WifiEnterpriseManager(private val context: Context) {
         enterpriseConfig: WifiEnterpriseConfig,
         eapMethod: String
     ): ConnectionResult {
-        // Remove any existing suggestion for this SSID first
-        removeNetworkSuggestion(ssid)
+        // Clear any prior suggestion first — the app holds one enterprise network
+        // at a time, and a stale one would compete during the next auto-join.
+        clearAllSuggestions()
 
         val suggestion = WifiNetworkSuggestion.Builder()
             .setSsid(ssid)
@@ -215,14 +232,15 @@ class WifiEnterpriseManager(private val context: Context) {
     }
 
     /**
-     * Remove network suggestion for an SSID
+     * Remove every network suggestion this app added. Android matches
+     * suggestions for removal by full equality (SSID + security + enterprise
+     * config), which can't be rebuilt from an SSID alone, so per-SSID removal
+     * isn't possible. The companion holds one enterprise network at a time, so
+     * clearing all is equivalent to forgetting it — and also stops a stale
+     * suggestion from competing during the next auto-join.
      */
-    fun removeNetworkSuggestion(ssid: String): Boolean {
-        val suggestion = WifiNetworkSuggestion.Builder()
-            .setSsid(ssid)
-            .build()
-
-        val status = wifiManager.removeNetworkSuggestions(listOf(suggestion))
+    fun clearAllSuggestions(): Boolean {
+        val status = wifiManager.removeNetworkSuggestions(emptyList())
         return status == WifiManager.STATUS_NETWORK_SUGGESTIONS_SUCCESS
     }
 
@@ -238,6 +256,16 @@ class WifiEnterpriseManager(private val context: Context) {
         val decoded = Base64.getDecoder().decode(cleanedPem)
         val certFactory = CertificateFactory.getInstance("X.509")
         return certFactory.generateCertificate(ByteArrayInputStream(decoded)) as X509Certificate
+    }
+
+    /**
+     * Parse a PEM that may contain one or more X.509 certificates (a CA chain).
+     */
+    private fun parseCertificates(pemData: String): List<X509Certificate> {
+        val certFactory = CertificateFactory.getInstance("X.509")
+        return pemData.byteInputStream().use { stream ->
+            certFactory.generateCertificates(stream).filterIsInstance<X509Certificate>()
+        }
     }
 
     /**

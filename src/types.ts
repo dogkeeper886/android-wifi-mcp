@@ -66,10 +66,10 @@ export interface EapConfig {
   identity: string;                  // Username/email
   password?: string;                 // For PEAP/TTLS
   anonymousIdentity?: string;        // Outer identity (optional)
-  domainSuffixMatch: string;         // Required for Android 11+
-  caCertificate?: string;            // Base64-encoded PEM or file path
-  clientCertificate?: string;        // Base64-encoded PEM (for EAP-TLS)
-  privateKey?: string;               // Base64-encoded PEM (for EAP-TLS)
+  domainSuffixMatch?: string;        // Server domain to match; optional when caCertificate is set
+  caCertificate?: string;            // PEM CA cert(s): a single cert, or a full chain (intermediates + self-signed root) for a public RADIUS cert
+  clientCertificate?: string;        // PEM (for EAP-TLS)
+  privateKey?: string;               // PEM, PKCS#8 (for EAP-TLS)
   privateKeyPassword?: string;       // If private key is encrypted
   verify?: boolean;                  // Poll for actual association after the suggestion is accepted (default true)
   verifyTimeoutMs?: number;          // How long to wait for association (default 30000)
