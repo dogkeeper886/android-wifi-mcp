@@ -28,12 +28,17 @@ class FakeAdbClient {
     this.calls = [];
     this.resultFileContent = opts.resultFileContent ?? null;
     this.companionAppInstalled = opts.companionAppInstalled ?? true;
+    this.commandWriteError = opts.commandWriteError ?? null;
   }
 
   async shell(command, _timeout) {
     this.calls.push(command);
     if (command.includes('pm list packages')) {
       return ok(this.companionAppInstalled ? `package:${COMPANION_PACKAGE}` : '');
+    }
+    // Simulate a failed command-file write (run-as denied, oversized payload, …).
+    if (this.commandWriteError && command.includes('base64 -d > files/wifi_mcp_command.json')) {
+      return fail(this.commandWriteError);
     }
     if (command.includes('cat files/wifi_mcp_result.json')) {
       return ok(this.resultFileContent ?? '');
@@ -48,6 +53,10 @@ class FakeAdbClient {
 
 function ok(stdout) {
   return { success: true, stdout, stderr: '', exitCode: 0 };
+}
+
+function fail(stderr) {
+  return { success: false, stdout: '', stderr, exitCode: 1 };
 }
 
 function validPeapConfig() {
@@ -236,4 +245,31 @@ test('run-as: writeCommandFile produces b64-pipe-decode command with correct pay
   assert.equal(decoded.domainSuffixMatch, 'corp.example.com');
   assert.equal(decoded.password, 'pw');
   assert.ok(typeof decoded.timestamp === 'number');
+});
+
+// ============ Command-file write failure (#115) ============
+//
+// A failed command-file write used to be ignored: the bridge broadcast anyway,
+// the companion read a stale/missing file, and the host burned the full 30 s
+// result-poll before reporting a bare timeout. The write must now fail fast
+// with the underlying reason, and must NOT broadcast or poll.
+
+test('write-failure: connectEnterprise fails fast with the write error, no broadcast', async () => {
+  const fake = new FakeAdbClient({
+    commandWriteError: 'run-as: Package is not debuggable',
+  });
+  const ent = new EnterpriseWifiCommands(fake);
+  const result = await ent.connectEnterprise(validPeapConfig());
+
+  assert.equal(result.success, false);
+  assert.match(result.error, /run-as: Package is not debuggable/);
+  // Must abort before broadcasting / polling — that was the 30 s hang.
+  assert.ok(
+    !fake.calls.some((c) => c.includes('am broadcast')),
+    'must not broadcast after a failed command-file write'
+  );
+  assert.ok(
+    !fake.calls.some((c) => c.includes('cat files/wifi_mcp_result.json')),
+    'must not poll for a result after a failed command-file write'
+  );
 });

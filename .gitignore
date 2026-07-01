@@ -10,3 +10,6 @@ cicd/tests/dist/
 
 # @playwright/mcp scratch (when used as an upstream)
 .playwright-mcp/
+
+# Enterprise-WiFi test material — holds a private key, never commit
+lab-certs/
