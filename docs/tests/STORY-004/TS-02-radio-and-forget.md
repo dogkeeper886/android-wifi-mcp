@@ -3,7 +3,7 @@ id: TS-02
 title: Radio controls and forget do what they say
 namespace: wifi
 story: STORY-004
-story_hash: 272e833442d0605dbbeca4a67c22e58be0f08f499e49da8edfc31e6b1620fb64
+story_hash: ecc52dc3d9f6ce59597ff8fd9e041a04bd35c5ad3423062c086b064a6f521fa0
 plan: 120
 issue: 128
 status: green
@@ -15,7 +15,8 @@ status: green
 `wifi_disconnect`, `wifi_forget`) change device state as claimed, confirmed by reading
 status out of band, and each test restores what it changed.
 
-Cases are **(to-be)** until the runnable binding ships (#130).
+Cases are **(to-be)** — the runnable binding shipped in #130 (`cicd/tests/testcases/wifi/`);
+they go green once run against a lab access point with `TEST_SSID_*` configured.
 
 ## TC-01 — enable turns the radio on (to-be)
 

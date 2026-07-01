@@ -3,7 +3,7 @@ id: TS-01
 title: Connect means associated, and the device is left as found
 namespace: wifi
 story: STORY-004
-story_hash: 272e833442d0605dbbeca4a67c22e58be0f08f499e49da8edfc31e6b1620fb64
+story_hash: ecc52dc3d9f6ce59597ff8fd9e041a04bd35c5ad3423062c086b064a6f521fa0
 plan: 120
 issue: 128
 status: green
@@ -15,8 +15,8 @@ status: green
 associated** to the target SSID — confirmed independently, not assumed from "config
 accepted" — and the test leaves the device in its original state.
 
-Cases are **(to-be)** until the runnable binding ships (#130) and a target network is
-configured (`TEST_SSID_*`).
+Cases are **(to-be)** — the runnable binding shipped in #130 (`cicd/tests/testcases/wifi/`);
+they go green once run against a lab access point with `TEST_SSID_*` configured.
 
 ## TC-01 — success means associated (to-be)
 
