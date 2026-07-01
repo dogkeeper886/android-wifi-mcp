@@ -52,3 +52,8 @@ cases — we can build the corpus fresh, working outward from the actual tool li
 
 - Created: 2026-07-01
 - Plan: #120
+- Issues: #127 (coverage matrix — recorded as a comment on the issue), #128, #129, #130, #131, #132, #133
+- Shipped (PR #135): scenario docs #128, wifi suite #130, gap tools #131, trim #129
+- Open: #132 (enterprise ownership vs STORY-002), #133 (CI wiring — held for STORY-003)
+- Test docs: `docs/tests/STORY-004/` (TS-01 connect e2e, TS-02 radio+forget, TS-03 network diagnostics)
+- Runnable cases: `cicd/tests/testcases/` — `wifi/` (TC-WIFI-001..005), `smoke/` (TC-SMK-015..018), `logging/` (TC-LOG-001)
