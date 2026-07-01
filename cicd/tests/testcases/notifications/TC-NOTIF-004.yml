@@ -1,0 +1,21 @@
+id: TC-NOTIF-004
+name: notifications_list_recent is reachable and well-shaped
+suite: notifications
+tags: [notifications]
+priority: 4
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: List recent notifications
+    command: npx tsx cicd/tests/src/mcp-client.ts notifications_list_recent '{"limit":5}'
+    expectPatterns:
+      - "notifications"
+      - "count"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  notifications_list_recent responds cleanly with the {notifications, count} shape
+  (the array may be empty, and a warning is returned when notification access is not
+  granted — neither is an error). Reachability + shape coverage for the tool.

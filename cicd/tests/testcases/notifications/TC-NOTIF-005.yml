@@ -1,0 +1,23 @@
+id: TC-NOTIF-005
+name: wifi_check_companion_app detects the installed companion app
+suite: notifications
+tags: [notifications, companion]
+priority: 5
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Check companion-app state
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_check_companion_app '{}'
+    expectPatterns:
+      - "companionAppInstalled.*true"
+      - "notificationAccessGranted"
+      - "capturedNotifications"
+    rejectPatterns:
+      - "isError"
+
+criteria: |
+  wifi_check_companion_app reports the companion-app state and actually detects the
+  installed app (companionAppInstalled true), not merely that the field exists — plus
+  the notificationAccessGranted and capturedNotifications fields. Assumes the companion
+  app is installed on the test device (part of the lab setup).
