@@ -52,3 +52,4 @@ cases — we can build the corpus fresh, working outward from the actual tool li
 
 - Created: 2026-07-01
 - Plan: #120
+- Issues: #127, #128, #129, #130, #131, #132, #133

@@ -52,3 +52,4 @@ rather than us hand-writing expected strings that break on the next run.
 
 - Created: 2026-07-01
 - Plan: #119
+- Issues: #122, #123, #124, #125, #126
