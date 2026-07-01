@@ -1,0 +1,37 @@
+---
+id: TS-03
+title: Network diagnostics reach a real host
+namespace: network
+story: STORY-004
+story_hash: 272e833442d0605dbbeca4a67c22e58be0f08f499e49da8edfc31e6b1620fb64
+plan: 120
+issue: 128
+status: green
+---
+
+# TS-03: Network diagnostics reach a real host
+
+**Objective:** The diagnostic tools (`network_dns_lookup`, `network_ping`) return a
+real result for a real target — a resolved address, a reachable host — not just a
+well-shaped empty response.
+
+Cases are **(to-be)** until the runnable binding ships (#131). Targets come from
+`TEST_DNS_HOSTNAME` / `TEST_PING_HOST`.
+
+## TC-01 — dns lookup resolves a hostname (to-be)
+
+| Action | Expected Result |
+|---|---|
+| Resolve a known-resolvable hostname | The result contains at least one IP address for that hostname |
+
+## TC-02 — dns lookup reports an unresolvable name plainly (to-be)
+
+| Action | Expected Result |
+|---|---|
+| Resolve a name that does not exist | The result reports resolution failure clearly — not a crash, not a false address |
+
+## TC-03 — ping reaches a live host (to-be)
+
+| Action | Expected Result |
+|---|---|
+| Ping a known-reachable host | The result reports the host reachable, with a latency figure |
