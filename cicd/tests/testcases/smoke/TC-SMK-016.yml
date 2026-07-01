@@ -1,0 +1,21 @@
+id: TC-SMK-016
+name: network_ping reaches a live host
+suite: smoke
+tags: [smoke, network]
+priority: 16
+timeout: 30000
+dependencies: []
+
+steps:
+  - name: Ping a known-reachable host
+    command: npx tsx cicd/tests/src/mcp-client.ts network_ping '{"host":"8.8.8.8","count":3}'
+    expectPatterns:
+      - "8.8.8.8"
+      - "packetLoss"
+    rejectPatterns:
+      - "isError"
+      - '"packetLoss": 100'
+
+criteria: |
+  network_ping reaches a known-reachable host and reports packet loss below 100%.
+  Assumes the device has internet (as the smoke suite does).
