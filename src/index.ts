@@ -1,3 +1,4 @@
+import 'dotenv/config'; // load .env before anything reads process.env (e.g. DATABASE_URL)
 import express from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { DeviceManager } from './adb/device-manager.js';
