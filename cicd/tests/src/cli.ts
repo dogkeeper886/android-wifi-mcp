@@ -13,7 +13,7 @@ import { mkdirSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { TestLoader } from './loader.js';
 import { TestExecutor } from './executor.js';
-import { SimpleJudge, AgentJudge } from './judge/index.js';
+import { SimpleJudge, AgentJudge, redactSecrets } from './judge/index.js';
 import { CONFIG, pickEnv } from './config.js';
 import { JsonReporter, ConsoleReporter } from './reporter/index.js';
 import { runMcpTest } from './mcp/test-mcp.js';
@@ -145,17 +145,22 @@ program
         judgments = judgments.map((sj) => {
           const aj = agentMap.get(sj.testId);
           if (!aj) return sj;
+          // Report reason AND evidence from the SAME judge — the one that failed
+          // (simple first); if both pass, the agent's. Keeps provenance aligned and
+          // preserves any extended fields the agent set. Redact secrets a test's
+          // stdout may have surfaced into the agent's evidence before it hits the report.
+          const reported = !sj.pass ? sj : aj;
           return {
+            ...aj,
             testId: sj.testId,
             pass: sj.pass && aj.pass,
-            // Surface the reason from whichever judge failed (simple first).
-            reason: !sj.pass ? sj.reason : aj.reason,
-            evidence: aj.evidence,
+            reason: reported.reason,
+            evidence: reported.evidence ? redactSecrets(reported.evidence) : undefined,
           };
         });
       } else {
         process.stderr.write(
-          '[JUDGE] [WARN] Agent judge unavailable — using deterministic verdicts only.\n'
+          `[JUDGE] [WARN] Agent judge unavailable — ${agentTargets.length} test(s) marked \`judge: agent\` fall back to deterministic verdicts only (not agent-verified).\n`
         );
       }
     }

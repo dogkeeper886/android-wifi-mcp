@@ -139,9 +139,11 @@ export async function runMcpHost(opts: McpHostOptions): Promise<McpTrajectory> {
       const serverName = s.name ?? 'mcp';
       const running = await spawnHttpMcpServer(s);
       const client = new Client({ name: 'mcp-host', version: '1.0.0' });
+      // Register for teardown BEFORE connect: if the handshake throws (server printed
+      // its URL then died, or a bad URL), the `finally` still stops the spawned process.
+      conns.push({ name: serverName, client, cleanup: running.cleanup });
       const transport = new StreamableHTTPClientTransport(new URL(`${running.baseUrl}/mcp`));
       await client.connect(transport);
-      conns.push({ name: serverName, client, cleanup: running.cleanup });
 
       const listed = await client.listTools();
       for (const t of listed.tools) {

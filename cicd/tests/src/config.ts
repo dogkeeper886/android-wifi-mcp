@@ -30,7 +30,8 @@ export const CONFIG = {
   // JUDGE_MODE=dual to ALSO run the ACP agent judge (both must pass).
   judge: {
     // 'simple' (default) = deterministic checks only. 'dual' = also run the agent judge.
-    mode: process.env.JUDGE_MODE || 'simple',
+    // Case-insensitive so JUDGE_MODE=DUAL isn't a silent no-op.
+    mode: (process.env.JUDGE_MODE || 'simple').toLowerCase(),
     // Command that launches the ACP agent. Empty → the bundled Claude ACP agent
     // (@agentclientprotocol/claude-agent-acp), keyless via the agent's own auth
     // (~/.claude / CLAUDE_CODE_OAUTH_TOKEN). Set to another ACP agent's command to

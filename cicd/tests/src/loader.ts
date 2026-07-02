@@ -10,6 +10,16 @@ import path from 'path';
 import { TestCase, TestStep } from './types.js';
 import { SUITES, CONFIG } from './config.js';
 
+/** Normalize a testcase's `judge` field. 'agent' opts into the agent judge; 'simple'
+ *  or absent means deterministic-only. An unrecognized value is a likely typo that
+ *  would silently downgrade verification — warn rather than swallow it. */
+function normalizeJudge(raw: unknown): 'agent' | undefined {
+  if (raw === undefined || raw === 'simple') return undefined;
+  if (raw === 'agent') return 'agent';
+  console.error(`[loader] Ignoring unrecognized judge value ${JSON.stringify(raw)} — expected 'simple' or 'agent'; running deterministic-only`);
+  return undefined;
+}
+
 export class TestLoader {
   private testcasesDir: string;
 
@@ -186,7 +196,7 @@ export class TestLoader {
       dependencies: Array.isArray(raw.dependencies) ? raw.dependencies : [],
       steps,
       criteria: typeof raw.criteria === 'string' ? raw.criteria : '',
-      judge: raw.judge === 'agent' ? 'agent' : undefined,
+      judge: normalizeJudge(raw.judge),
     };
   }
 }

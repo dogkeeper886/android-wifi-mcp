@@ -44,8 +44,15 @@ export async function spawnHttpMcpServer(
   });
 
   let done = false;
+  let killing = false;
   const cleanup = () => {
-    if (!proc.killed) proc.kill('SIGTERM');
+    if (killing) return;
+    killing = true;
+    try { proc.kill('SIGTERM'); } catch { /* already gone */ }
+    // Our server awaits DB/proxy/pool close on SIGTERM; if that wedges, force-kill so a
+    // stuck shutdown can't leak the process. Unref'd so the timer never keeps us alive.
+    const t = setTimeout(() => { try { proc.kill('SIGKILL'); } catch { /* gone */ } }, 3000);
+    t.unref?.();
   };
 
   const baseUrl = await new Promise<string>((resolve, reject) => {
@@ -63,7 +70,8 @@ export async function spawnHttpMcpServer(
       if (m && !done) {
         done = true;
         clearTimeout(deadline);
-        resolve(m[1]);
+        // The server binds/prints 0.0.0.0; connect to loopback (portable across OSes).
+        resolve(m[1].replace('0.0.0.0', '127.0.0.1'));
       }
     };
     proc.stdout?.on('data', onLine);
