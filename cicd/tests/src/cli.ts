@@ -13,8 +13,11 @@ import { mkdirSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { TestLoader } from './loader.js';
 import { TestExecutor } from './executor.js';
-import { SimpleJudge } from './judge/index.js';
+import { SimpleJudge, AgentJudge, redactSecrets } from './judge/index.js';
+import { CONFIG, pickEnv } from './config.js';
 import { JsonReporter, ConsoleReporter } from './reporter/index.js';
+import { runMcpTest } from './mcp/test-mcp.js';
+import { makeBackend } from './mcp/backends/index.js';
 import { RunConfig } from './types.js';
 
 const program = new Command();
@@ -122,7 +125,45 @@ program
 
     process.stderr.write('\n[JUDGE] Running simple judge...\n');
     const simpleJudge = new SimpleJudge();
-    const judgments = simpleJudge.judgeAll(results);
+    let judgments = simpleJudge.judgeAll(results);
+
+    // Dual mode (STORY-003): also run the ACP agent judge; a test passes only if
+    // BOTH the deterministic and agent judges pass. Fail-safe: if the agent can't
+    // run (no auth/agent), keep the simple verdicts rather than failing everything.
+    // Per-test judge style (#125): only tests that opt in with `judge: agent` pay for
+    // the agent judge; deterministic tests keep the fast SimpleJudge verdict.
+    const agentTargets = results.filter((r) => r.testCase.judge === 'agent');
+    if (CONFIG.judge.mode === 'dual' && agentTargets.length === 0) {
+      process.stderr.write('[JUDGE] Dual mode: no tests declare `judge: agent` — deterministic only.\n');
+    }
+    if (CONFIG.judge.mode === 'dual' && agentTargets.length > 0) {
+      process.stderr.write(`[JUDGE] Running agent judge (dual mode) on ${agentTargets.length} test(s)...\n`);
+      const agentJudge = new AgentJudge();
+      if (await agentJudge.isAvailable()) {
+        const agentJudgments = await agentJudge.judgeResults(agentTargets);
+        const agentMap = new Map(agentJudgments.map((j) => [j.testId, j]));
+        judgments = judgments.map((sj) => {
+          const aj = agentMap.get(sj.testId);
+          if (!aj) return sj;
+          // Report reason AND evidence from the SAME judge — the one that failed
+          // (simple first); if both pass, the agent's. Keeps provenance aligned and
+          // preserves any extended fields the agent set. Redact secrets a test's
+          // stdout may have surfaced into the agent's evidence before it hits the report.
+          const reported = !sj.pass ? sj : aj;
+          return {
+            ...aj,
+            testId: sj.testId,
+            pass: sj.pass && aj.pass,
+            reason: reported.reason,
+            evidence: reported.evidence ? redactSecrets(reported.evidence) : undefined,
+          };
+        });
+      } else {
+        process.stderr.write(
+          `[JUDGE] [WARN] Agent judge unavailable — ${agentTargets.length} test(s) marked \`judge: agent\` fall back to deterministic verdicts only (not agent-verified).\n`
+        );
+      }
+    }
 
     const jsonReporter = new JsonReporter(outputDir);
     const { summary, reports } = jsonReporter.generateReports(
@@ -178,6 +219,63 @@ program
 
     console.log('\n' + '='.repeat(60));
     console.log(`Total: ${testCases.length} test(s)`);
+  });
+
+program
+  .command('test-mcp')
+  .description("Test whether models can drive our MCP server's tools (with --verify-live, the judge calls the read-only tools itself)")
+  .argument('<models...>', 'One or more model names to test')
+  .option('--prompt <text>', 'Prompt that should trigger a tool call', CONFIG.mcp.prompt)
+  .option('-c, --num-ctx <n>', 'Context window size', '8192')
+  .option('--judge', 'Also run the agent judge on the final answer (dual mode)', false)
+  .option('-H, --host <url>', 'Backend host (e.g. the Ollama host)', CONFIG.mcp.host)
+  .option('--backend <name>', 'Chat backend (model runtime) — built-in: ollama', CONFIG.mcp.backend)
+  .option('--mcp-command <cmd>', 'Command to launch our MCP server', CONFIG.mcp.command)
+  .option('--mcp-args <args>', 'Args for the MCP server (space-separated; no spaces within a single arg)', CONFIG.mcp.args.join(' '))
+  .option('--mcp-env <names>', 'Comma-separated env var names to forward to the server as creds (overrides MCP_ENV)', '')
+  .option('--distractor-command <cmd>', 'Optional second (menu-only) MCP server — its tools join the menu as distractors the model must NOT pick; the verifier never touches it')
+  .option('--distractor-args <args>', 'Args for the distractor MCP server (space-separated; no spaces within a single arg)', '')
+  .option('--verify-live', "Verify the answer against LIVE truth: the judge calls the server's read-only tools itself (supersedes --judge)", false)
+  .option('--verify-allow <names>', 'Comma-separated exact tool names the verifier may call (fail-closed: empty verifies nothing)', '')
+  .option('--verify-server-name <name>', 'Name of the server the verifier spawns (its tools are mcp__<name>__<tool>)', 'mcp')
+  .option('--timeout <seconds>', 'Per-call response timeout', '1800')
+  .option('-o, --output <file>', 'Write the JSON report to this file')
+  .action(async (models: string[], options) => {
+    const code = await runMcpTest({
+      models,
+      prompt: options.prompt,
+      numCtx: Number(options.numCtx),
+      timeoutMs: Number(options.timeout) * 1000,
+      judge: options.judge,
+      verifyLive: options.verifyLive,
+      verifyAllow: options.verifyAllow
+        ? String(options.verifyAllow).split(',').map((s: string) => s.trim()).filter(Boolean)
+        : undefined,
+      verifyServerName: options.verifyServerName,
+      backend: makeBackend(options.backend, { host: options.host }),
+      // Primary server (the verifier's read-only target) is named after --verify-server-name
+      // so the verifier can find it. An optional distractor server joins the model's menu only.
+      servers: [
+        {
+          name: options.verifyServerName,
+          command: options.mcpCommand,
+          args: String(options.mcpArgs).split(' ').filter(Boolean),
+          cwd: CONFIG.mcp.cwd,
+          env: options.mcpEnv ? pickEnv(options.mcpEnv) : CONFIG.mcp.env,
+        },
+        ...(options.distractorCommand
+          ? [{
+              name: 'distractor',
+              command: options.distractorCommand,
+              args: String(options.distractorArgs).split(' ').filter(Boolean),
+            }]
+          : []),
+      ],
+      output: options.output,
+    });
+    // Flush stdout before forcing exit — the markdown summary is piped to tee in CI.
+    await new Promise<void>((resolve) => process.stdout.write('', () => resolve()));
+    process.exit(code);
   });
 
 program.parse();

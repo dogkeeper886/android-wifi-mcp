@@ -22,6 +22,10 @@ export interface TestCase {
   steps: TestStep[];
   criteria: string;
   goal?: string;
+  /** Judge style (STORY-003 #125). 'simple' (default) = deterministic checks only —
+   *  fast, free, right for stable tools. 'agent' = ALSO run the ACP agent judge in
+   *  dual mode, for tools whose output isn't deterministic (connect/scan/status). */
+  judge?: 'simple' | 'agent';
 }
 
 export interface PatternMatch {
@@ -55,6 +59,20 @@ export interface Judgment {
   pass: boolean;
   reason: string;
   evidence?: string;
+  /** Why the evidence cell is what it is — set by the live verifier (VerifierJudge)
+   *  so an empty cell explains itself instead of reading as a silent pass. */
+  evidenceStatus?:
+    | 'captured'
+    | 'denied'
+    | 'not-called'
+    | 'no-data'
+    | 'verifier-unavailable';
+  /** Per-stage rubric flags from the live verifier: did the model pick the right
+   *  tool, call it correctly, and ground its answer in the result? */
+  stages?: { tool: boolean; query: boolean; content: boolean };
+  /** Deterministic cross-check: claims in the answer the live tool result does not
+   *  support (the verifier's PASS cannot stand if this is non-empty). */
+  crossCheckUnsupported?: string[];
 }
 
 export interface StepReportEntry {
