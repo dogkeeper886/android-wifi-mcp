@@ -1,4 +1,4 @@
-.PHONY: up down restart logs psql migrate migrate-down test test-unit build clean \
+.PHONY: up down restart logs psql migrate migrate-down test test-unit build build-server build-app clean \
         doctor adb devices udev serve serve-stop serve-restart serve-all serve-all-stop \
         setup readme-diagram help
 
@@ -39,7 +39,10 @@ help:
 	@echo "  make up / down / restart / logs / psql / migrate"
 	@echo ""
 	@echo "Build / test:"
-	@echo "  make build / test / test-unit / clean"
+	@echo "  make build          build everything: server (npm) + companion APK (gradle)"
+	@echo "  make build-server   build the Node MCP server only"
+	@echo "  make build-app      build the Kotlin companion APK only"
+	@echo "  make test / test-unit / clean"
 
 # ---- Host setup & server lifecycle -----------------------------------------
 
@@ -98,7 +101,7 @@ serve-restart:
 # Both bind 0.0.0.0 with NO auth, and playwright's host-check is disabled
 # (--allowed-hosts "*") so it answers a remote IP — reachability grants full phone
 # control. Exposure/auth stance: #100.
-serve-all: build
+serve-all: build-server
 	@command -v adb >/dev/null 2>&1 || { echo "adb not found -> make adb"; exit 1; }
 	@mkdir -p $(SERVE_ALL_LOG)
 	@for p in $(PORT) $(PW_PORT); do command -v lsof >/dev/null 2>&1 && lsof -ti:$$p >/dev/null 2>&1 && echo "  warning: :$$p already in use — run 'make serve-all-stop' first if this is a stale bundle" || true; done
@@ -132,7 +135,7 @@ readme-diagram:
 
 setup:
 	@command -v adb >/dev/null 2>&1 || $(MAKE) adb
-	$(MAKE) build
+	$(MAKE) build-server
 	@$(MAKE) doctor
 	@echo ""
 	@echo "Next: make serve   (then reconnect the MCP client)"
@@ -162,13 +165,21 @@ migrate:
 migrate-down:
 	npx node-pg-migrate down
 
-build:
+# `make build` builds everything shippable: the Node MCP server and the Kotlin
+# companion APK. Server-only workflows (test, serve-all, setup) depend on
+# build-server so they don't pull in the Android SDK.
+build: build-server build-app
+
+build-server:
 	npm run build
+
+build-app:
+	cd companion-app && ./gradlew assembleDebug
 
 test-unit:
 	npm run test:unit
 
-test: build
+test: build-server
 	cd cicd/tests && npm test
 
 clean:
