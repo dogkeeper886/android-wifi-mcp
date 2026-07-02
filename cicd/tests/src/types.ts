@@ -55,6 +55,20 @@ export interface Judgment {
   pass: boolean;
   reason: string;
   evidence?: string;
+  /** Why the evidence cell is what it is — set by the live verifier (VerifierJudge)
+   *  so an empty cell explains itself instead of reading as a silent pass. */
+  evidenceStatus?:
+    | 'captured'
+    | 'denied'
+    | 'not-called'
+    | 'no-data'
+    | 'verifier-unavailable';
+  /** Per-stage rubric flags from the live verifier: did the model pick the right
+   *  tool, call it correctly, and ground its answer in the result? */
+  stages?: { tool: boolean; query: boolean; content: boolean };
+  /** Deterministic cross-check: claims in the answer the live tool result does not
+   *  support (the verifier's PASS cannot stand if this is non-empty). */
+  crossCheckUnsupported?: string[];
 }
 
 export interface StepReportEntry {
