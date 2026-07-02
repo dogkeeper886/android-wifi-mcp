@@ -13,7 +13,8 @@ import { mkdirSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { TestLoader } from './loader.js';
 import { TestExecutor } from './executor.js';
-import { SimpleJudge } from './judge/index.js';
+import { SimpleJudge, AgentJudge } from './judge/index.js';
+import { CONFIG } from './config.js';
 import { JsonReporter, ConsoleReporter } from './reporter/index.js';
 import { RunConfig } from './types.js';
 
@@ -122,7 +123,34 @@ program
 
     process.stderr.write('\n[JUDGE] Running simple judge...\n');
     const simpleJudge = new SimpleJudge();
-    const judgments = simpleJudge.judgeAll(results);
+    let judgments = simpleJudge.judgeAll(results);
+
+    // Dual mode (STORY-003): also run the ACP agent judge; a test passes only if
+    // BOTH the deterministic and agent judges pass. Fail-safe: if the agent can't
+    // run (no auth/agent), keep the simple verdicts rather than failing everything.
+    if (CONFIG.judge.mode === 'dual') {
+      process.stderr.write('[JUDGE] Running agent judge (dual mode)...\n');
+      const agentJudge = new AgentJudge();
+      if (await agentJudge.isAvailable()) {
+        const agentJudgments = await agentJudge.judgeResults(results);
+        const agentMap = new Map(agentJudgments.map((j) => [j.testId, j]));
+        judgments = judgments.map((sj) => {
+          const aj = agentMap.get(sj.testId);
+          if (!aj) return sj;
+          return {
+            testId: sj.testId,
+            pass: sj.pass && aj.pass,
+            // Surface the reason from whichever judge failed (simple first).
+            reason: !sj.pass ? sj.reason : aj.reason,
+            evidence: aj.evidence,
+          };
+        });
+      } else {
+        process.stderr.write(
+          '[JUDGE] [WARN] Agent judge unavailable — using deterministic verdicts only.\n'
+        );
+      }
+    }
 
     const jsonReporter = new JsonReporter(outputDir);
     const { summary, reports } = jsonReporter.generateReports(
