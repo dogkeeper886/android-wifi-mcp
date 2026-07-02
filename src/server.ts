@@ -449,8 +449,7 @@ export function createMcpServer(
       const wifi = deviceManager.getWifiCommands();
       await wifi.setEnabled(true);
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const enabled = await wifi.isEnabled();
+      const enabled = await wifi.waitForEnabled(true);
 
       return {
         content: [
@@ -472,14 +471,13 @@ export function createMcpServer(
       const wifi = deviceManager.getWifiCommands();
       await wifi.setEnabled(false);
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const enabled = await wifi.isEnabled();
+      const disabled = await wifi.waitForEnabled(false);
 
       return {
         content: [
           {
             type: 'text',
-            text: !enabled ? 'WiFi disabled successfully' : 'WiFi disable command sent (verify with wifi_status)',
+            text: disabled ? 'WiFi disabled successfully' : 'WiFi disable command sent (verify with wifi_status)',
           },
         ],
       };
