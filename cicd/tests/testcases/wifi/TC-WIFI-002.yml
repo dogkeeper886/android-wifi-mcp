@@ -5,6 +5,9 @@ tags: [wifi, connect]
 priority: 2
 timeout: 90000
 dependencies: []
+# Connect outcome is non-deterministic (association may still be settling); let the
+# agent judge grade "actually associated to the target SSID" in dual mode.
+judge: agent
 
 steps:
   - name: Connect to the WPA2 test network

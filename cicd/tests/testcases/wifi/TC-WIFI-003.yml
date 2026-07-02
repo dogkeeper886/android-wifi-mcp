@@ -5,6 +5,8 @@ tags: [wifi, connect]
 priority: 3
 timeout: 90000
 dependencies: []
+# Connect outcome is non-deterministic; agent judge grades real association in dual mode.
+judge: agent
 
 steps:
   - name: Connect to the open test network
