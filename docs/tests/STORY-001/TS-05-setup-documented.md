@@ -3,7 +3,7 @@ id: TS-05
 title: Setup is documented and repeatable
 namespace: remote-stack
 story: STORY-001
-story_hash: 2937da1a558ea87ccb89179849dc3cf225de98f93ebf192f4819db0a3ee1a5a8
+story_hash: 4f42d5b1693d86abbca8a49743d1cd89f479d8db07d8ec0a0d379fc211fa144c
 plan: 95
 issue: 94
 status: green
