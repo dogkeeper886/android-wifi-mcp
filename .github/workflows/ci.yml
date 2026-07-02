@@ -2,6 +2,15 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      judge_mode:
+        description: 'Judge mode for the suites'
+        required: false
+        default: 'simple'
+        type: choice
+        options:
+          - simple
+          - dual
 
 jobs:
   build:
@@ -10,4 +19,6 @@ jobs:
   test-smoke:
     needs: build
     uses: ./.github/workflows/test-smoke.yml
+    with:
+      judge_mode: ${{ inputs.judge_mode }}
     secrets: inherit

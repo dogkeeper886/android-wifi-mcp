@@ -7,6 +7,11 @@ on:
         description: 'Suite tag to filter tests (e.g. smoke)'
         required: true
         type: string
+      judge_mode:
+        description: "Judge mode: 'simple' (deterministic only) or 'dual' (also run the ACP agent judge on tests that opt in with `judge: agent`)"
+        required: false
+        default: 'simple'
+        type: string
 
 jobs:
   test:
@@ -31,3 +36,8 @@ jobs:
         env:
           TEST_DEVICE_SERIAL: ${{ secrets.TEST_DEVICE_SERIAL }}
           ADB_PATH: ${{ secrets.ADB_PATH }}
+          # Judge mode + agent auth (STORY-003). In 'dual', tests marked `judge: agent`
+          # also run the ACP agent judge; if the token/agent is absent it degrades to
+          # deterministic verdicts (never a mass failure).
+          JUDGE_MODE: ${{ inputs.judge_mode }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

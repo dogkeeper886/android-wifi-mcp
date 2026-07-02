@@ -130,11 +130,17 @@ program
     // Dual mode (STORY-003): also run the ACP agent judge; a test passes only if
     // BOTH the deterministic and agent judges pass. Fail-safe: if the agent can't
     // run (no auth/agent), keep the simple verdicts rather than failing everything.
-    if (CONFIG.judge.mode === 'dual') {
-      process.stderr.write('[JUDGE] Running agent judge (dual mode)...\n');
+    // Per-test judge style (#125): only tests that opt in with `judge: agent` pay for
+    // the agent judge; deterministic tests keep the fast SimpleJudge verdict.
+    const agentTargets = results.filter((r) => r.testCase.judge === 'agent');
+    if (CONFIG.judge.mode === 'dual' && agentTargets.length === 0) {
+      process.stderr.write('[JUDGE] Dual mode: no tests declare `judge: agent` — deterministic only.\n');
+    }
+    if (CONFIG.judge.mode === 'dual' && agentTargets.length > 0) {
+      process.stderr.write(`[JUDGE] Running agent judge (dual mode) on ${agentTargets.length} test(s)...\n`);
       const agentJudge = new AgentJudge();
       if (await agentJudge.isAvailable()) {
-        const agentJudgments = await agentJudge.judgeResults(results);
+        const agentJudgments = await agentJudge.judgeResults(agentTargets);
         const agentMap = new Map(agentJudgments.map((j) => [j.testId, j]));
         judgments = judgments.map((sj) => {
           const aj = agentMap.get(sj.testId);

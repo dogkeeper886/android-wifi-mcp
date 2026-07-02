@@ -22,6 +22,10 @@ export interface TestCase {
   steps: TestStep[];
   criteria: string;
   goal?: string;
+  /** Judge style (STORY-003 #125). 'simple' (default) = deterministic checks only —
+   *  fast, free, right for stable tools. 'agent' = ALSO run the ACP agent judge in
+   *  dual mode, for tools whose output isn't deterministic (connect/scan/status). */
+  judge?: 'simple' | 'agent';
 }
 
 export interface PatternMatch {

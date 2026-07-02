@@ -186,6 +186,7 @@ export class TestLoader {
       dependencies: Array.isArray(raw.dependencies) ? raw.dependencies : [],
       steps,
       criteria: typeof raw.criteria === 'string' ? raw.criteria : '',
+      judge: raw.judge === 'agent' ? 'agent' : undefined,
     };
   }
 }

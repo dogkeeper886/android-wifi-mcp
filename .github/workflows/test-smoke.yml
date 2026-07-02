@@ -3,10 +3,17 @@ name: "Test: Smoke"
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      judge_mode:
+        description: "Judge mode: simple or dual"
+        required: false
+        default: 'simple'
+        type: string
 
 jobs:
   test:
     uses: ./.github/workflows/test-run.yml
     with:
       tag: smoke
+      judge_mode: ${{ inputs.judge_mode || 'simple' }}
     secrets: inherit
