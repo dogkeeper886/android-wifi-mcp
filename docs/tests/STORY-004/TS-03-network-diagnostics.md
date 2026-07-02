@@ -39,4 +39,4 @@ TC-02 is **(to-be)** — no binding yet.
 
 | Action | Expected Result |
 |---|---|
-| Ping a known-reachable host | The result reports the host reachable, with a latency figure |
+| Ping a known-reachable host | The result reports the host reachable (`alive` true) |

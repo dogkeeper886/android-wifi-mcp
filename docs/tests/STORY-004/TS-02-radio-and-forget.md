@@ -12,8 +12,9 @@ status: green
 # TS-02: Radio controls and forget do what they say
 
 **Objective:** The mutating radio tools (`wifi_enable`, `wifi_disable`,
-`wifi_disconnect`, `wifi_forget`) change device state as claimed, confirmed by reading
-status out of band, and each test restores what it changed.
+`wifi_disconnect`, `wifi_forget`) change device state as claimed — each confirmed by the
+tool's own verified result (enable/disable re-read `isEnabled()`; forget re-lists) — and
+each test restores what it changed.
 
 All four cases are bound and run green against a lab AP (proven this session).
 
