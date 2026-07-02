@@ -7,6 +7,7 @@
  *   npx tsx src/cli.ts list [options]
  */
 
+import './load-env.js'; // must be first: loads repo-root .env before config.js reads process.env
 import { Command } from 'commander';
 import path from 'path';
 import { mkdirSync, existsSync } from 'fs';
