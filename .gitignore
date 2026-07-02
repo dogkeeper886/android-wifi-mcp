@@ -13,3 +13,4 @@ cicd/tests/dist/
 
 # Enterprise-WiFi test material — holds a private key, never commit
 lab-certs/
+certs/
