@@ -23,7 +23,12 @@ export class WifiCommands {
     if (!result.success) {
       throw new Error(`Failed to get WiFi status: ${result.stderr}`);
     }
-    return result.stdout.toLowerCase().includes('wifi is enabled');
+    // Check "disabled" first: when off, the status reads "Wifi is disabled\n
+    // Wifi scanning is only available when wifi is enabled" — that second line
+    // contains "wifi is enabled", so a bare includes() false-positives as on.
+    const out = result.stdout.toLowerCase();
+    if (out.includes('wifi is disabled')) return false;
+    return out.includes('wifi is enabled');
   }
 
   /**
@@ -34,6 +39,22 @@ export class WifiCommands {
     const result = await this.adb.shell(`cmd wifi set-wifi-enabled ${state}`);
     if (!result.success) {
       throw new Error(`Failed to ${enabled ? 'enable' : 'disable'} WiFi: ${result.stderr}`);
+    }
+  }
+
+  /**
+   * Poll until the radio reaches `target`, or the deadline elapses; returns
+   * whether it was confirmed. `cmd wifi set-wifi-enabled` returns before the
+   * radio settles, so a single fixed sleep false-negatives when toggling an
+   * active connection (Android disconnects, then flips the radio — >1s). Same
+   * poll-don't-sleep fix as the connect verify (#65).
+   */
+  async waitForEnabled(target: boolean, timeoutMs = 8000): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs;
+    while (true) {
+      if ((await this.isEnabled()) === target) return true;
+      if (Date.now() >= deadline) return false;
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
   }
 
