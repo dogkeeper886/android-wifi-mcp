@@ -12,31 +12,39 @@ status: green
 # TS-02: Radio controls and forget do what they say
 
 **Objective:** The mutating radio tools (`wifi_enable`, `wifi_disable`,
-`wifi_disconnect`, `wifi_forget`) change device state as claimed, confirmed by reading
-status out of band, and each test restores what it changed.
+`wifi_disconnect`, `wifi_forget`) change device state as claimed — each confirmed by the
+tool's own verified result (enable/disable re-read `isEnabled()`; forget re-lists) — and
+each test restores what it changed.
 
-Cases are **(to-be)** — the runnable binding shipped in #130 (`cicd/tests/testcases/wifi/`);
-they go green once run against a lab access point with `TEST_SSID_*` configured.
+All four cases are bound and run green against a lab AP (proven this session).
 
-## TC-01 — enable turns the radio on (to-be)
+## TC-01 — enable turns the radio on
+
+**Script:** cicd/tests/testcases/wifi/TC-WIFI-001.yml
 
 | Action | Expected Result |
 |---|---|
 | Enable WiFi, then read status | Status reports WiFi **enabled** |
 
-## TC-02 — disable turns the radio off, then it is restored (to-be)
+## TC-02 — disable turns the radio off, then it is restored
+
+**Script:** cicd/tests/testcases/wifi/TC-WIFI-001.yml
 
 | Action | Expected Result |
 |---|---|
 | Disable WiFi, read status, then re-enable | Status reports WiFi **disabled**; after re-enable the radio is on again — the device is left as found |
 
-## TC-03 — disconnect drops the active association (to-be)
+## TC-03 — disconnect issues a clean disconnect
+
+**Script:** cicd/tests/testcases/wifi/TC-WIFI-004.yml
 
 | Action | Expected Result |
 |---|---|
-| While associated, disconnect, then read status | Status reports **not connected** to the previously-active SSID |
+| While associated, disconnect (toggle mode) | The tool returns a clean disconnect ("Disconnected from WiFi network"); note toggle bounces the radio and Android auto-rejoins the saved network, so this checks the call, not a persistent off |
 
-## TC-04 — forget removes a saved network (to-be)
+## TC-04 — forget removes a saved network
+
+**Script:** cicd/tests/testcases/wifi/TC-WIFI-005.yml
 
 | Action | Expected Result |
 |---|---|

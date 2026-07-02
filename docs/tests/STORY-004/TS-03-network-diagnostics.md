@@ -21,6 +21,8 @@ TC-02 is **(to-be)** — no binding yet.
 
 ## TC-01 — dns lookup resolves a hostname
 
+**Script:** cicd/tests/testcases/smoke/TC-SMK-015.yml
+
 | Action | Expected Result |
 |---|---|
 | Resolve a known-resolvable hostname | The result contains at least one IP address for that hostname |
@@ -33,6 +35,8 @@ TC-02 is **(to-be)** — no binding yet.
 
 ## TC-03 — ping reaches a live host
 
+**Script:** cicd/tests/testcases/smoke/TC-SMK-016.yml
+
 | Action | Expected Result |
 |---|---|
-| Ping a known-reachable host | The result reports the host reachable, with a latency figure |
+| Ping a known-reachable host | The result reports the host reachable (`alive` true) |

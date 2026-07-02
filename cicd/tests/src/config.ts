@@ -2,7 +2,7 @@
  * Project configuration for the test framework.
  */
 
-export const SUITES = ['smoke', 'wifi', 'enterprise', 'ui', 'sms', 'notifications', 'portal', 'proxy'] as const;
+export const SUITES = ['smoke', 'wifi', 'enterprise', 'ui', 'sms', 'notifications', 'portal', 'proxy', 'logging'] as const;
 export type Suite = typeof SUITES[number];
 
 /** Forward selected env vars by NAME (comma-separated) — used to hand the MCP server

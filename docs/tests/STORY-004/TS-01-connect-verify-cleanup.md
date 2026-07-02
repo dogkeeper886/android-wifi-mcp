@@ -15,10 +15,12 @@ status: green
 associated** to the target SSID — confirmed independently, not assumed from "config
 accepted" — and the test leaves the device in its original state.
 
-Cases are **(to-be)** — the runnable binding shipped in #130 (`cicd/tests/testcases/wifi/`);
-they go green once run against a lab access point with `TEST_SSID_*` configured.
+TC-01 and TC-03 are bound and run green against a lab AP (proven with `TEST_SSID_WPA2`).
+TC-02 (failed connect) and TC-04 (cleanup, a runner mechanism) have no single script yet — **(to-be)**.
 
-## TC-01 — success means associated (to-be)
+## TC-01 — success means associated
+
+**Script:** cicd/tests/testcases/wifi/TC-WIFI-002.yml
 
 | Action | Expected Result |
 |---|---|
@@ -30,7 +32,9 @@ they go green once run against a lab access point with `TEST_SSID_*` configured.
 |---|---|
 | Connect with a wrong password (or an out-of-range SSID) | Within a bounded window the result is **not** a success — it reports not-associated with a clear reason |
 
-## TC-03 — independent confirmation (to-be)
+## TC-03 — independent confirmation
+
+**Script:** cicd/tests/testcases/wifi/TC-WIFI-002.yml
 
 | Action | Expected Result |
 |---|---|

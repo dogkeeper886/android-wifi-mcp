@@ -7,8 +7,7 @@ paths:
 
 A sibling to `dev-workflow`. Where dev-workflow turns a need into shipped code, qa-workflow
 turns a story into **trustworthy test docs** — readable markdown in `docs/tests/`, authored
-from a reviewed test plan. This repo owns the **authoring** half (markdown + GitHub); binding
-those docs to a runner and running them is the project's own layer.
+from a reviewed test plan, then **bound** to the `cicd/tests` runner and kept fresh.
 
 ## The flow
 
@@ -22,7 +21,13 @@ those docs to a runner and running them is the project's own layer.
    qw-cases ──────► qw-review-cases     write docs/tests/TS-*.md (the format contract)
             │
             ▼
-   → hand off to the project's binding + run layer
+   qw-bind ───────► qw-review-bind      link each case to its cicd script (**Script:**)
+            │
+            ▼
+   [ run the suite: make test / cicd runner ]
+            │
+            ▼
+   qw-drift                             freshness gate — story_hash + binding audit
 ```
 
 ## The test-plan issue
@@ -37,15 +42,19 @@ reads it and records the issue number in each `TS-*.md` `plan:` field.
 |----------|--------|--------|
 | `qw-plan`  | `qw-review-plan`  | does the plan cover the story? |
 | `qw-cases` | `qw-review-cases` | each doc: one job, observable, traces back |
+| `qw-bind`  | `qw-review-bind`  | each case links to a resolving `**Script:**` |
+| —          | `qw-drift`        | story_hash + binding freshness (no producer — it *is* a review) |
 
 No producer ships without a review covering its output.
 
-## What this owns — and what it hands off
+## What this owns
 
-- **Owns:** the authoring flow + the `docs/tests/` test-doc format (the contract). Self-contained
-  — markdown + GitHub only.
-- **Hands off:** binding each case to an executable and running it is the **project's binding +
-  run layer**. Reusing vetted steps (a search index) is an **optional** project enhancement.
+- The authoring flow + the `docs/tests/` format (the contract), **and** the binding + drift
+  gate: `qw-bind`/`qw-review-bind` (`npm run audit-bind`) and `qw-drift` (`npm run drift`),
+  backed by `cicd/tests/src/{testdoc,audit-bind,drift,port-yaml}.ts`.
+- Binding is **audit, not codegen**: markdown owns intent, the cicd YAML owns execution. Our
+  docs are outcome-oriented, so a case is *bound* when its `**Script:**` resolves (no
+  step-count match); `(to-be)` cases and `binding: manual` docs are expected-unbound.
 
 The format a test doc must follow is `docs/tests/README.md`.
 

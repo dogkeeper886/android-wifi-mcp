@@ -13,13 +13,13 @@ status: green
 **Objective:** Today's WPA2-Enterprise path keeps working unchanged — the new
 verification and validation options don't break the flows that already work.
 
-## TC-01 — existing WPA2-Enterprise connect
+## TC-01 — existing WPA2-Enterprise connect (to-be)
 
 | Action | Expected Result |
 |---|---|
 | Connect to a WPA2-Enterprise SSID via PEAP/TTLS/TLS with a CA and a domain (the current flow) | The device associates as it does today — no new requirement or failure introduced |
 
-## TC-02 — companion-app status check
+## TC-02 — companion-app status check (to-be)
 
 | Action | Expected Result |
 |---|---|
