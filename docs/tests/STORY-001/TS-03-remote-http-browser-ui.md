@@ -7,6 +7,7 @@ story_hash: 4f42d5b1693d86abbca8a49743d1cd89f479d8db07d8ec0a0d379fc211fa144c
 plan: 95
 issue: 94
 status: green
+binding: manual
 ---
 
 # TS-03: Remote client reaches the browser + UI servers over http

@@ -9,7 +9,10 @@
     "test": "tsx src/cli.ts run",
     "test:smoke": "tsx src/cli.ts run --suite smoke",
     "list": "tsx src/cli.ts list",
-    "dev": "tsx src/cli.ts"
+    "dev": "tsx src/cli.ts",
+    "audit-bind": "tsx src/audit-bind.ts",
+    "drift": "tsx src/drift.ts",
+    "port-yaml": "tsx src/port-yaml.ts"
   },
   "dependencies": {
     "@agentclientprotocol/claude-agent-acp": "^0.44.0",

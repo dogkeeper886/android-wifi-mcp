@@ -14,7 +14,7 @@ status: green
 **Objective:** Each documented server-validation mode connects — including the lab
 combinations — while the existing strict mode is preserved.
 
-## TC-01 — strict validation (CA + domain)
+## TC-01 — strict validation (CA + domain) (to-be)
 
 | Action | Expected Result |
 |---|---|
