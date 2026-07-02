@@ -16,7 +16,10 @@ steps:
   - name: Find the saved network's id
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_list_networks '{}'
     expectPatterns:
-      - "{{TEST_SSID_WPA2}}"
+      # Anchor to the SSID's surrounding quotes so a saved network that shares this
+      # SSID's prefix can't satisfy the check. Patterns are regex over the double-
+      # encoded payload where quotes render escaped (\"), hence \\" here.
+      - '\\"{{TEST_SSID_WPA2}}\\"'
     rejectPatterns:
       - "isError"
     capture:
@@ -31,10 +34,14 @@ steps:
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_list_networks '{}'
     rejectPatterns:
       - "isError"
-      - "{{TEST_SSID_WPA2}}"
+      # Quote-anchored like the find step (#155): a bare {{TEST_SSID_WPA2}} is a regex
+      # over the saved list, so a saved network sharing this SSID's prefix would
+      # false-fail removal. \\" matches the escaped quote in the double-encoded payload.
+      - '\\"{{TEST_SSID_WPA2}}\\"'
 
 criteria: |
   wifi_forget removes a saved network by id (captured from wifi_list_networks), confirmed
   by the SSID being absent from the saved list afterward. Needs TEST_SSID_WPA2(+_PASSWORD)
   and a real AP. TEST_SSID_WPA2 must not contain a dot or regex metacharacters — the
-  capture path splits on "." and the SSID is used verbatim in patterns.
+  capture path splits on "." and the SSID is used (quote-anchored) in patterns. The
+  quotes anchor to the exact saved entry so a prefix-sharing SSID does not false-match.
