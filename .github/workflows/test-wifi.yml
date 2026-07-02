@@ -1,0 +1,39 @@
+name: "Test: WiFi"
+
+# The wifi suite mutates the radio and connects to real networks, so it needs a lab
+# access point + credentials. It is NOT part of the default CI (ci.yml runs smoke); run
+# it explicitly, and it self-skips unless the lab is marked ready.
+#
+# Lab setup on the self-hosted runner:
+#   - repo variable  WIFI_LAB = true                 (arms this workflow)
+#   - repo secrets   TEST_SSID_WPA2 / _PASSWORD, TEST_SSID_OPEN, TEST_DEVICE_SERIAL,
+#                    CLAUDE_CODE_OAUTH_TOKEN         (test data + agent-judge auth)
+# Locally, `make test SUITE=wifi` (with TEST_SSID_* exported) stays the first-class path.
+
+on:
+  workflow_dispatch:
+    inputs:
+      judge_mode:
+        description: 'Judge mode (dual runs the agent judge on connect e2e)'
+        required: false
+        default: 'dual'
+        type: choice
+        options:
+          - dual
+          - simple
+  workflow_call:
+    inputs:
+      judge_mode:
+        required: false
+        default: 'dual'
+        type: string
+
+jobs:
+  test:
+    # Skip cleanly (green, not failed) unless the lab is armed — no device/secrets → no run.
+    if: ${{ vars.WIFI_LAB == 'true' }}
+    uses: ./.github/workflows/test-run.yml
+    with:
+      tag: wifi
+      judge_mode: ${{ inputs.judge_mode || 'dual' }}
+    secrets: inherit
