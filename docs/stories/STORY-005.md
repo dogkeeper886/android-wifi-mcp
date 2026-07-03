@@ -59,4 +59,5 @@ what happened to be on the phone beforehand, which is the opposite of a trustwor
 ## Status
 
 - Created: 2026-07-03
-- Issues: none (motivating bug: #164)
+- Plan: #165
+- Issues: none yet (motivating bug: #164)
