@@ -12,8 +12,13 @@ import { closePool } from './db/pool.js';
 
 const log = logger.child({ component: 'server' });
 
-const deviceManager = new DeviceManager();
-const deviceObserver = new DeviceObserver(process.env.ADB_PATH);
+// Empty string (e.g. an unset CI secret injected as ADB_PATH="") must fall back to
+// the default 'adb': a default parameter only applies to `undefined`, and spawn("")
+// throws "argument 'file' cannot be empty", crashing the server on startup. Apply the
+// resolved path to both the observer and tool calls so ADB_PATH is honored consistently.
+const adbPath = process.env.ADB_PATH || undefined;
+const deviceManager = new DeviceManager(adbPath);
+const deviceObserver = new DeviceObserver(adbPath);
 deviceManager.setObserver(deviceObserver);
 const upstreamProxy = new UpstreamProxy();
 const { server: mcpServer, nativeToolNames } = createMcpServer(deviceManager, upstreamProxy);
