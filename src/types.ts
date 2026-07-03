@@ -83,13 +83,6 @@ export interface EnterpriseConnectionResult {
   error?: string;
 }
 
-export interface CertificateInstallResult {
-  success: boolean;
-  alias: string;
-  type: 'ca' | 'client';
-  error?: string;
-}
-
 // Network Diagnostics Types
 export interface PingResult {
   host: string;

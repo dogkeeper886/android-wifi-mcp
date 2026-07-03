@@ -51,8 +51,6 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="com.example.wifimcpcompanion.CONNECT_ENTERPRISE" />
-                <action android:name="com.example.wifimcpcompanion.INSTALL_CERTIFICATE" />
-                <action android:name="com.example.wifimcpcompanion.LIST_CERTIFICATES" />
                 <action android:name="com.example.wifimcpcompanion.DISCONNECT" />
                 <action android:name="com.example.wifimcpcompanion.LIST_NOTIFICATIONS" />
                 <action android:name="com.example.wifimcpcompanion.NOTIFICATION_STATUS" />
