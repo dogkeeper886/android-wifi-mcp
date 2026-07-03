@@ -1,4 +1,5 @@
 import { AdbClient } from './adb-client.js';
+import { shQuote } from './shell-quote.js';
 import { parseRouteGet } from '../network/network-check.js';
 import {
   ScanResult,
@@ -195,10 +196,9 @@ export class WifiCommands {
     // takes the bare SSID; the framework adds wpa_supplicant's on-disk
     // quoting itself. Wrapping with literal `"..."` here would persist
     // those characters as part of the SSID and break association.
-    const sq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-    let command = `cmd wifi connect-network ${sq(ssid)} ${security}`;
+    let command = `cmd wifi connect-network ${shQuote(ssid)} ${security}`;
     if (password && security !== 'open') {
-      command += ` ${sq(password)}`;
+      command += ` ${shQuote(password)}`;
     }
 
     const result = await this.adb.shell(command);
