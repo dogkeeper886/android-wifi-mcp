@@ -83,11 +83,24 @@ export class WifiCommands {
   /**
    * Scan for networks (start scan + get results)
    */
-  async scan(): Promise<ScanResult[]> {
+  async scan(timeoutMs = 10000): Promise<ScanResult[]> {
     await this.startScan();
-    // Wait a bit for scan to complete
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    return this.getScanResults();
+    // `cmd wifi start-scan` returns before results land, so a single fixed sleep
+    // false-negatives when the scan hasn't finished — most reliably right after a
+    // radio toggle, which clears the result cache and resets the scan-throttle
+    // window (the empty cache then reads as zero networks). Poll the cached results
+    // until non-empty or the deadline, re-issuing the scan periodically (throttle-
+    // permitting) to nudge fresh results. Poll-don't-sleep, like waitForEnabled (#65).
+    const deadline = Date.now() + timeoutMs;
+    let results = await this.getScanResults();
+    let elapsed = 0;
+    while (results.length === 0 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      elapsed += 500;
+      if (elapsed % 2500 === 0) await this.startScan().catch(() => {});
+      results = await this.getScanResults();
+    }
+    return results;
   }
 
   /**
