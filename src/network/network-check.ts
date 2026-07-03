@@ -1,4 +1,5 @@
 import { AdbClient } from '../adb/adb-client.js';
+import { shQuote } from '../adb/shell-quote.js';
 import {
   PingResult,
   DnsResult,
@@ -217,13 +218,6 @@ export class NetworkCheck {
   }
 }
 
-/**
- * Single-quote a string for safe interpolation into a device `adb shell`
- * command (the host side uses execFile, but the device runs the string in sh).
- */
-function shQuote(s: string): string {
-  return `'${s.replace(/'/g, "'\\''")}'`;
-}
 
 /**
  * Find the `NetworkAgentInfo` line for the device's Wi-Fi network in

@@ -1,4 +1,5 @@
 import { AdbClient } from './adb-client.js';
+import { shQuote } from './shell-quote.js';
 
 export type SettingsNamespace = 'system' | 'secure' | 'global';
 
@@ -41,7 +42,7 @@ export class SettingsCommands {
   }
 
   async get(namespace: SettingsNamespace, key: string): Promise<SettingsGetResult> {
-    const result = await this.adb.shell(`settings get ${namespace} ${shellQuote(key)}`);
+    const result = await this.adb.shell(`settings get ${namespace} ${shQuote(key)}`);
     if (!result.success) {
       return {
         namespace,
@@ -58,7 +59,7 @@ export class SettingsCommands {
 
   async put(namespace: SettingsNamespace, key: string, value: string): Promise<SettingsPutResult> {
     const result = await this.adb.shell(
-      `settings put ${namespace} ${shellQuote(key)} ${shellQuote(value)}`
+      `settings put ${namespace} ${shQuote(key)} ${shQuote(value)}`
     );
     if (!result.success) {
       return {
@@ -73,7 +74,7 @@ export class SettingsCommands {
   }
 
   async delete(namespace: SettingsNamespace, key: string): Promise<SettingsDeleteResult> {
-    const result = await this.adb.shell(`settings delete ${namespace} ${shellQuote(key)}`);
+    const result = await this.adb.shell(`settings delete ${namespace} ${shQuote(key)}`);
     if (!result.success) {
       return {
         namespace,
@@ -84,10 +85,4 @@ export class SettingsCommands {
     }
     return { namespace, key, success: true };
   }
-}
-
-function shellQuote(s: string): string {
-  // Single-quote and escape any embedded single quotes. Safe for both host
-  // execFile (no host shell) and the device shell that adb forwards to.
-  return `'${s.replace(/'/g, "'\\''")}'`;
 }
