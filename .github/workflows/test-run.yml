@@ -45,6 +45,16 @@ jobs:
           TEST_SSID_WPA2_PASSWORD: ${{ secrets.TEST_SSID_WPA2_PASSWORD }}
           TEST_SSID_WPA3: ${{ secrets.TEST_SSID_WPA3 }}
           TEST_SSID_WPA3_PASSWORD: ${{ secrets.TEST_SSID_WPA3_PASSWORD }}
+          # Enterprise EAP-TLS fixtures — the enterprise suite reads these ({{TEST_SSID_ENTERPRISE}}
+          # + $TEST_EAP_* in the jq-built connect args). The certs are multi-line PEMs stored as
+          # secrets. Absent → the enterprise cases skip (requires ssidInRange) or fail cleanly;
+          # other suites ignore them. Locally, .env supplies these instead.
+          TEST_SSID_ENTERPRISE: ${{ secrets.TEST_SSID_ENTERPRISE }}
+          TEST_EAP_IDENTITY: ${{ secrets.TEST_EAP_IDENTITY }}
+          TEST_EAP_DOMAIN: ${{ secrets.TEST_EAP_DOMAIN }}
+          TEST_EAP_CLIENT_CERT: ${{ secrets.TEST_EAP_CLIENT_CERT }}
+          TEST_EAP_PRIVATE_KEY: ${{ secrets.TEST_EAP_PRIVATE_KEY }}
+          TEST_EAP_CA_CERT: ${{ secrets.TEST_EAP_CA_CERT }}
           # Judge mode + agent auth (STORY-003). In 'dual', tests marked `judge: agent`
           # also run the ACP agent judge; if the token/agent is absent it degrades to
           # deterministic verdicts (never a mass failure).
