@@ -52,6 +52,67 @@ export async function ensureSsidInRange(ssid: string, settleMs = 4000): Promise<
   }
 }
 
+/**
+ * Forget saved networks — the "clear config" primitive for a case's `setup`/`teardown`.
+ * Boundary so a shared phone is never wiped: `all` requires `TEST_DEDICATED_DEVICE=true`;
+ * otherwise only networks whose SSID is in `ssids` (the caller's explicit allowlist) are
+ * forgotten — an unlisted (personal) network is never touched. Returns how many were
+ * forgotten.
+ */
+export async function clearSavedNetworks(opts: { ssids?: string[]; all?: boolean }): Promise<number> {
+  const dedicated = /^(1|true|yes)$/i.test(process.env.TEST_DEDICATED_DEVICE || '');
+  const saved = await listSavedNetworks();
+
+  let targets: Array<{ id: number; ssid: string }>;
+  if (opts.all) {
+    if (!dedicated) {
+      throw new Error(
+        'clearSavedNetworks({ all: true }) refused: set TEST_DEDICATED_DEVICE=true to wipe all saved networks (guards a shared phone).'
+      );
+    }
+    targets = saved;
+  } else {
+    const allow = new Set(opts.ssids ?? []);
+    targets = saved.filter((n) => allow.has(n.ssid));
+  }
+
+  const forgotten = new Set<number>();
+  for (const n of targets) {
+    if (forgotten.has(n.id)) continue;
+    try {
+      await adbShell(`cmd wifi forget-network ${n.id}`);
+      forgotten.add(n.id);
+    } catch {
+      // best-effort — a missing id is not fatal
+    }
+  }
+  return forgotten.size;
+}
+
+/** Saved networks as {id, ssid}. Parses `cmd wifi list-networks` where the SSID column
+ *  may contain spaces (id is the first token, security the last, SSID everything between);
+ *  dedupes the per-security-param duplicate rows by id. */
+async function listSavedNetworks(): Promise<Array<{ id: number; ssid: string }>> {
+  try {
+    const output = await adbShell('cmd wifi list-networks');
+    const nets: Array<{ id: number; ssid: string }> = [];
+    const seen = new Set<number>();
+    for (const line of output.split('\n')) {
+      const t = line.trim();
+      if (!t || t.startsWith('Network Id')) continue;
+      const m = t.match(/^(\d+)\s+(.+?)\s+\S+$/);
+      if (!m) continue;
+      const id = parseInt(m[1], 10);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      nets.push({ id, ssid: m[2].trim() });
+    }
+    return nets;
+  } catch {
+    return [];
+  }
+}
+
 export async function snapshotDeviceState(): Promise<DeviceSnapshot> {
   const statusOut = await adbShell('cmd wifi status');
   const wifiEnabled = /wifi is enabled/i.test(statusOut);
