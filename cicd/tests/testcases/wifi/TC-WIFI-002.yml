@@ -9,6 +9,10 @@ dependencies: []
 # agent judge grade "actually associated to the target SSID" in dual mode.
 judge: agent
 
+# Skip cleanly (green) if the WPA2 AP isn't on the air, instead of failing the connect.
+requires:
+  ssidInRange: "{{TEST_SSID_WPA2}}"
+
 steps:
   - name: Connect to the WPA2 test network
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_connect '{"ssid":"{{TEST_SSID_WPA2}}","security":"wpa2","password":"{{TEST_SSID_WPA2_PASSWORD}}"}'

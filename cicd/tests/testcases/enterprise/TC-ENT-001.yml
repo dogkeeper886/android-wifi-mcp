@@ -1,0 +1,74 @@
+id: TC-ENT-001
+name: wifi_connect_enterprise (EAP-TLS) associates, then wifi_disconnect_enterprise tears it down
+suite: enterprise
+tags: [enterprise, connect, disconnect]
+priority: 1
+timeout: 180000
+# The connect outcome is non-deterministic (association settles); the agent judge grades
+# "actually associated to the 802.1X SSID" in dual mode. The deterministic checks always run.
+judge: agent
+
+# Only run when the 802.1X AP is actually on the air — otherwise skip (green), don't fail.
+requires:
+  ssidInRange: "{{TEST_SSID_ENTERPRISE}}"
+
+# Self-contained setup: a WifiNetworkSuggestion (how wifi_connect_enterprise connects)
+# ranks BELOW user-saved networks, so an in-range saved competitor makes the device roam
+# off the 802.1X network right after it associates (#164). Forget the test networks that
+# would out-rank it so the suggestion wins. Only the listed (test) SSIDs are touched —
+# personal networks are safe (see clearSavedNetworks' boundary). The wifi suite re-creates
+# these when it runs.
+setup:
+  - name: Clear competing saved test networks so the enterprise suggestion wins auto-join
+    command: npx tsx cicd/tests/src/device-cli.ts clear-networks "{{TEST_SSID_OPEN}}" "{{TEST_SSID_WPA2}}" "{{TEST_SSID_WPA3}}"
+
+steps:
+  - name: Connect to the 802.1X network via EAP-TLS
+    # jq builds the args so the multi-line PEM fixtures escape correctly. The CA is the
+    # self-signed server root (not the served fullchain) — see the enterprise-certs skill.
+    command: |
+      args=$(jq -nc \
+        --arg ssid "$TEST_SSID_ENTERPRISE" \
+        --arg id "$TEST_EAP_IDENTITY" \
+        --arg dom "$TEST_EAP_DOMAIN" \
+        --arg cc "$TEST_EAP_CLIENT_CERT" \
+        --arg pk "$TEST_EAP_PRIVATE_KEY" \
+        --arg ca "$TEST_EAP_CA_CERT" \
+        '{ssid:$ssid, eapMethod:"tls", identity:$id, domainSuffixMatch:$dom, clientCertificate:$cc, privateKey:$pk, caCertificate:$ca, verifyTimeoutMs:45000}')
+      npx tsx cicd/tests/src/mcp-client.ts wifi_connect_enterprise "$args"
+    expectPatterns:
+      - "success.*true"
+      - "Connected to enterprise"
+    rejectPatterns:
+      - "isError"
+      - "Not a CA certificate"
+      - "unknown_ca"
+  - name: Confirm association out of band
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
+    expectPatterns:
+      - "connected.*true"
+      - "{{TEST_SSID_ENTERPRISE}}"
+    rejectPatterns:
+      - "isError"
+  - name: Disconnect — wifi_disconnect_enterprise removes the suggestion
+    command: |
+      npx tsx cicd/tests/src/mcp-client.ts wifi_disconnect_enterprise "$(jq -nc --arg ssid "$TEST_SSID_ENTERPRISE" '{ssid:$ssid}')"
+    expectPatterns:
+      - "success.*true"
+    rejectPatterns:
+      - "isError"
+
+# Always leave no enterprise suggestion behind, even if a step above failed mid-way.
+teardown:
+  - name: Ensure the enterprise suggestion is removed
+    command: |
+      npx tsx cicd/tests/src/mcp-client.ts wifi_disconnect_enterprise "$(jq -nc --arg ssid "$TEST_SSID_ENTERPRISE" '{ssid:$ssid}')" || true
+
+criteria: |
+  Covers wifi_connect_enterprise AND wifi_disconnect_enterprise end to end, self-contained:
+  EAP-TLS connect actually associates to the 802.1X SSID (confirmed out of band via
+  wifi_status), then disconnect removes the suggestion. `setup` clears the in-range test
+  networks that would otherwise out-rank the suggestion and cause a roam-off (#164);
+  `requires` skips cleanly when the AP is off the air. Preconditions: companion app
+  installed + its suggestion approval granted once, and TEST_SSID_ENTERPRISE / TEST_EAP_*
+  fixtures (see the android-wifi-mcp-enterprise-certs skill).

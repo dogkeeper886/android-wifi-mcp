@@ -8,6 +8,10 @@ dependencies: []
 # Connect outcome is non-deterministic; agent judge grades real association in dual mode.
 judge: agent
 
+# Skip cleanly (green) if the open AP isn't on the air, instead of failing the connect.
+requires:
+  ssidInRange: "{{TEST_SSID_OPEN}}"
+
 steps:
   - name: Connect to the open test network
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_connect '{"ssid":"{{TEST_SSID_OPEN}}","security":"open"}'
