@@ -384,12 +384,14 @@ export class WifiCommands {
 
     const stateConnected = dumpsys.includes('state: COMPLETED') || dumpsys.includes('CONNECTED');
 
-    // Extract SSID. `<unknown ssid>` is the framework's placeholder when
-    // there's no real association (or location-permission gate); treat
-    // it the same as `<none>` and leave status.ssid undefined.
-    const ssidMatch = dumpsys.match(/SSID:\s*["']?([^"',\n]+)["']?/i);
+    // Extract SSID. dumpsys renders a real SSID quoted (`SSID: "Name",`) and the
+    // no-association placeholder unquoted (`SSID: <unknown ssid>,`). The quoted branch
+    // captures everything up to the closing quote so a comma INSIDE the SSID isn't
+    // truncated (#112); the unquoted branch stops at the delimiting comma for the
+    // `<none>`/`<unknown ssid>` placeholders, which we then drop.
+    const ssidMatch = dumpsys.match(/SSID:\s*(?:"([^"\n]+)"|([^",\n]+))/i);
     if (ssidMatch) {
-      const raw = ssidMatch[1].trim();
+      const raw = (ssidMatch[1] ?? ssidMatch[2]).trim();
       if (raw !== '<none>' && raw !== '<unknown ssid>') {
         status.ssid = raw;
       }
