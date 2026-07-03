@@ -6,6 +6,15 @@ priority: 7
 timeout: 30000
 dependencies: []
 
+# Self-contained: connect to the open network so there's connectivity to report, rather
+# than assuming a baseline connection (STORY-005). Skip cleanly if the AP is off the air.
+requires:
+  ssidInRange: "{{TEST_SSID_OPEN}}"
+
+setup:
+  - name: Connect to the open network to establish connectivity
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_connect '{"ssid":"{{TEST_SSID_OPEN}}","security":"open"}'
+
 steps:
   - name: Get WiFi interface info
     command: npx tsx cicd/tests/src/mcp-client.ts network_interface_info '{}'

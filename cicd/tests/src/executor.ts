@@ -315,23 +315,30 @@ export class TestExecutor {
 
     // --- requires: precondition gate. Unmet → skip (green), don't fail deep in a step.
     if (testCase.requires?.ssidInRange) {
-      const ssid = this.substituteVariables(testCase.requires.ssidInRange);
-      const inRange = await ensureSsidInRange(ssid);
-      if (!inRange) {
-        this.progress(`    [SKIP] requires: SSID "${ssid}" not in range`);
-        if (snapshot) {
-          await restoreDeviceState(snapshot).catch(() => {});
-        }
+      const skip = (reason: string): TestResult => {
+        this.progress(`    [SKIP] requires: ${reason}`);
         this.currentTestId = null;
         return {
           testCase,
           steps: [],
           totalDuration: Date.now() - startTime,
-          logs: `SKIPPED: requires ssidInRange "${ssid}" not in range`,
+          logs: `SKIPPED: requires ${reason}`,
           logFile: '',
           skipped: true,
-          skipReason: `ssidInRange "${ssid}" not in range`,
+          skipReason: reason,
         };
+      };
+      let ssid: string;
+      try {
+        ssid = this.substituteVariables(testCase.requires.ssidInRange);
+      } catch (e) {
+        // Precondition references an unset fixture — skip (green), don't crash the run.
+        if (snapshot) await restoreDeviceState(snapshot).catch(() => {});
+        return skip((e as Error).message);
+      }
+      if (!(await ensureSsidInRange(ssid))) {
+        if (snapshot) await restoreDeviceState(snapshot).catch(() => {});
+        return skip(`ssidInRange "${ssid}" not in range`);
       }
     }
 

@@ -8,6 +8,10 @@ timeout: 90000
 # agent judge grade "actually associated to the target SSID" in dual mode.
 judge: agent
 
+# Skip cleanly (green) if the WPA3 AP isn't on the air, instead of failing the connect.
+requires:
+  ssidInRange: "{{TEST_SSID_WPA3}}"
+
 steps:
   - name: Connect to the WPA3 (SAE) test network
     command: npx tsx cicd/tests/src/mcp-client.ts wifi_connect '{"ssid":"{{TEST_SSID_WPA3}}","security":"wpa3","password":"{{TEST_SSID_WPA3_PASSWORD}}"}'
