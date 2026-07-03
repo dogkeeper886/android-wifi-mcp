@@ -20,6 +20,13 @@ dependencies: [TC-WIFI-002]        # tests that must run first (topo-sorted)
 judge: simple                      # optional: 'simple' (default) or 'agent' (see below)
 goal: One-line objective for the agent judge (optional)
 
+requires:                          # optional precondition — case SKIPS if unmet
+  ssidInRange: "{{TEST_SSID_WPA2}}"  #   the SSID must be scan-confirmed in range
+
+setup:                             # optional — steps run BEFORE `steps` (same shape)
+  - name: Bring device to a known-clean state
+    command: ...
+
 steps:
   - name: Step description
     command: shell command to execute       # usually mcp-client.ts <tool> '<json>'
@@ -31,9 +38,30 @@ steps:
     capture:                       # extract values from the tool's JSON output
       varName: "field[key=value].subfield"
 
+teardown:                          # optional — steps run AFTER `steps`, ALWAYS (even on failure)
+  - name: Remove what this case created
+    command: ...
+
 criteria: |
   Human-readable pass criteria (also the agent judge's rubric context).
 ```
+
+## Lifecycle phases (STORY-005)
+
+A case runs as `requires → setup → steps → teardown → (framework restore)`:
+
+- `requires` — a precondition checked before anything runs. `ssidInRange: "<SSID>"`
+  makes the runner scan and confirm the SSID is present; if it isn't, the case is
+  **skipped** (green) rather than failing deep in a step.
+- `setup` — step-array run before `steps` to bring the device to a known-clean starting
+  state (so a case doesn't inherit baseline or another case's residue).
+- `teardown` — step-array run after `steps`, **always** — even when a step failed — to
+  remove exactly what the case created and return the device to its pre-test state.
+
+`setup`/`teardown` are the same shape as `steps` and get `{{VAR}}` substitution. Use them
+so each case is **self-contained**: it prepares its own state and cleans up after itself,
+independent of run order or baseline. (Framework `snapshot`/`restore` still runs around
+every case as a backstop; the phases are the case's own explicit control.)
 
 ## Judge style (STORY-003)
 
