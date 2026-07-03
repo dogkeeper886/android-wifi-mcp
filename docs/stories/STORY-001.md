@@ -31,4 +31,4 @@ The team wants one phone, wired to a shared host, drivable by whoever needs it, 
 - **Done: 2026-06-26** — acceptance run green (see #95); all of "Success Looks Like" met: local stdio drives all three, a remote machine drives all three + an end-to-end flow on the one phone, from documented repeatable setup.
 - Created: 2026-06-25
 - Issues: #94 (plan), #95 (test plan), #98 · #99 · #100 (tasks), #102 (mobile-next remote fix — proxied through android-wifi)
-- Notes: the device-browser legs require Chrome Canary foregrounded (precondition, see `docs/integrations/canary-cdp.md`); shared-device concurrent-writes (TS-07 TC-02) left defined-by-serialization, not stress-tested (relates to #62).
+- Notes: the device-browser legs require Chrome Canary foregrounded (precondition); shared-device concurrent-writes (TS-07 TC-02) left defined-by-serialization, not stress-tested (relates to #62).
