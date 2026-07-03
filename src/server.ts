@@ -657,61 +657,6 @@ export function createMcpServer(
   );
 
   mcpServer.tool(
-    'wifi_install_certificate',
-    'Install a CA or client certificate for enterprise WiFi. Requires companion app.',
-    {
-      certificate: z.string().describe('Certificate content (base64-encoded PEM or DER)'),
-      alias: z.string().describe('Friendly name for the certificate'),
-      type: z.enum(['ca', 'client']).describe('Certificate type'),
-    },
-    async ({ certificate, alias, type }) => {
-      await ensureDevice();
-      const enterpriseWifi = new EnterpriseWifiCommands(deviceManager.getAdbClient());
-
-      const result = await enterpriseWifi.installCertificate(certificate, alias, type);
-
-      if (result.success) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  success: true,
-                  alias: result.alias,
-                  type: result.type,
-                  message: `Certificate "${alias}" installed successfully`,
-                },
-                null,
-                2
-              ),
-            },
-          ],
-        };
-      } else {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  success: false,
-                  alias: result.alias,
-                  type: result.type,
-                  error: result.error,
-                },
-                null,
-                2
-              ),
-            },
-          ],
-          isError: true,
-        };
-      }
-    }
-  );
-
-  mcpServer.tool(
     'wifi_check_companion_app',
     'Check if the enterprise WiFi companion app is installed',
     {},

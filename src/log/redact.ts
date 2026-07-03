@@ -6,7 +6,6 @@
  *   - privateKey                             (EAP-TLS, base64 PEM)
  *   - caCertificate, clientCertificate       (EAP-TLS, base64 PEM blobs —
  *     redacted because they bloat the row, not because they're secret)
- *   - certificate                            (wifi_install_certificate)
  *
  * If a future tool adds a new secret-bearing key, add it here. A heuristic
  * match (e.g. /password|secret/i) was rejected to avoid false positives like
@@ -19,7 +18,6 @@ const SENSITIVE_KEYS = new Set([
   'privatekeypassword',
   'cacertificate',
   'clientcertificate',
-  'certificate',
 ]);
 
 const REDACTED = '***';

@@ -6,7 +6,7 @@
 ![node](https://img.shields.io/badge/node-%E2%89%A518-3c873a)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
-An [MCP](https://modelcontextprotocol.io) server that turns a phone wired to a host into a programmable device. It speaks `adb` to one selected Android device and exposes **33 tools** over Streamable HTTP — scan/connect WiFi (incl. 802.1X enterprise), run network diagnostics, capture SMS/notification OTPs, read/write settings, push/pull files. Point Claude (or any MCP client) at it and automate phone QA: join a captive-portal network, wait for the OTP, drive the page, tap the dialog.
+An [MCP](https://modelcontextprotocol.io) server that turns a phone wired to a host into a programmable device. It speaks `adb` to one selected Android device and exposes **32 tools** over Streamable HTTP — scan/connect WiFi (incl. 802.1X enterprise), run network diagnostics, capture SMS/notification OTPs, read/write settings, push/pull files. Point Claude (or any MCP client) at it and automate phone QA: join a captive-portal network, wait for the OTP, drive the page, tap the dialog.
 
 It also serves the **whole QA stack to a remote machine** — with one command the host publishes android-wifi *plus* the device browser *plus* on-device UI, so a tester whose laptop isn't wired to the phone can still run end-to-end flows against it.
 
@@ -44,15 +44,15 @@ Now ask: *"list devices, scan WiFi, connect to `<ssid>`."* On Linux without root
 
 ## The tools
 
-android-wifi registers **32 native tools**. Beyond those, its **upstream proxy** spawns *other* MCP servers as stdio children and merges their tools into one list — so a client connects to android-wifi alone and gets WiFi/device **+** browser **+** on-device UI together:
+android-wifi registers **31 native tools**. Beyond those, its **upstream proxy** spawns *other* MCP servers as stdio children and merges their tools into one list — so a client connects to android-wifi alone and gets WiFi/device **+** browser **+** on-device UI together:
 
-![One tool surface: android-wifi native (32) plus @playwright/mcp (~21 browser_*) and mobile-next (~23 mobile_*) stdio upstreams merge through the upstream proxy into one tools/list on :3000.](docs/images/tool-surface.png)
+![One tool surface: android-wifi native (31) plus @playwright/mcp (~21 browser_*) and mobile-next (~23 mobile_*) stdio upstreams merge through the upstream proxy into one tools/list on :3000.](docs/images/tool-surface.png)
 
 | Group | Tools |
 |-------|-------|
 | **Device** | `device_list` · `device_select` · `device_info` · `device_event_log` · `device_screenshot` · `query_log` |
 | **WiFi** | `wifi_scan` · `wifi_connect` · `wifi_disconnect` · `wifi_status` · `wifi_enable` · `wifi_disable` · `wifi_list_networks` · `wifi_forget` |
-| **Enterprise 802.1X** | `wifi_connect_enterprise` · `wifi_disconnect_enterprise` · `wifi_install_certificate` · `wifi_check_companion_app` |
+| **Enterprise 802.1X** | `wifi_connect_enterprise` · `wifi_disconnect_enterprise` · `wifi_check_companion_app` |
 | **Network diagnostics** | `network_ping` · `network_dns_lookup` · `network_check_internet` · `network_check_captive` · `network_interface_info` |
 | **SMS / OTP** | `sms_read_recent` · `sms_wait_for_otp` |
 | **Notification OTP** | `notifications_list_recent` · `notifications_wait_for_otp` |
@@ -95,7 +95,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 # open the app once; for notification OTPs, tap "Grant Notification Access"
 ```
 
-Then `wifi_connect_enterprise` (PEAP/TTLS/TLS), `wifi_install_certificate`, and `notifications_wait_for_otp` work; `wifi_check_companion_app` reports install + grant status. SMS OTPs (`sms_*`) need no app, but `content://sms/inbox` is locked down on some Samsung/OEM builds — fall back to notification capture there.
+Then `wifi_connect_enterprise` (PEAP/TTLS/TLS) and `notifications_wait_for_otp` work; `wifi_check_companion_app` reports install + grant status. SMS OTPs (`sms_*`) need no app, but `content://sms/inbox` is locked down on some Samsung/OEM builds — fall back to notification capture there.
 
 ## Structured logging (optional, Postgres)
 

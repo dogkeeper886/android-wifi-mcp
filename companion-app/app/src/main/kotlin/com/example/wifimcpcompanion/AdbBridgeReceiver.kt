@@ -22,8 +22,6 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         private const val TAG = "AdbBridgeReceiver"
 
         const val ACTION_CONNECT_ENTERPRISE = "com.example.wifimcpcompanion.CONNECT_ENTERPRISE"
-        const val ACTION_INSTALL_CERTIFICATE = "com.example.wifimcpcompanion.INSTALL_CERTIFICATE"
-        const val ACTION_LIST_CERTIFICATES = "com.example.wifimcpcompanion.LIST_CERTIFICATES"
         const val ACTION_DISCONNECT = "com.example.wifimcpcompanion.DISCONNECT"
         const val ACTION_LIST_NOTIFICATIONS = "com.example.wifimcpcompanion.LIST_NOTIFICATIONS"
         const val ACTION_NOTIFICATION_STATUS = "com.example.wifimcpcompanion.NOTIFICATION_STATUS"
@@ -41,8 +39,6 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         try {
             when (intent.action) {
                 ACTION_CONNECT_ENTERPRISE -> handleConnectEnterprise(context)
-                ACTION_INSTALL_CERTIFICATE -> handleInstallCertificate(context)
-                ACTION_LIST_CERTIFICATES -> handleListCertificates(context)
                 ACTION_DISCONNECT -> handleDisconnect(context)
                 ACTION_LIST_NOTIFICATIONS -> handleListNotifications(context)
                 ACTION_NOTIFICATION_STATUS -> handleNotificationStatus(context)
@@ -141,55 +137,6 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         )
     }
 
-    private fun handleInstallCertificate(context: Context) {
-        val config = readConfigFile(commandFile(context))
-
-        if (config == null) {
-            writeResult(context, false, "Failed to read config file", mapOf("action" to "install_certificate"))
-            return
-        }
-
-        val certificate = config.getString("certificate")
-        val alias = config.getString("alias")
-        val type = config.getString("type")
-
-        val certManager = CertificateManager(context)
-
-        val result = when (type.lowercase()) {
-            "ca" -> certManager.installCaCertificate(certificate, alias)
-            "client" -> {
-                // For client certificates, we need the private key too
-                val privateKey = config.optString("privateKey", null)
-                val privateKeyPassword = config.optString("privateKeyPassword", null)
-                if (privateKey != null) {
-                    certManager.installClientCertificate(certificate, privateKey, privateKeyPassword, alias)
-                } else {
-                    CertificateManager.CertificateResult(
-                        success = false,
-                        alias = alias,
-                        error = "Private key is required for client certificates"
-                    )
-                }
-            }
-            else -> CertificateManager.CertificateResult(
-                success = false,
-                alias = alias,
-                error = "Unknown certificate type: $type"
-            )
-        }
-
-        writeResult(
-            context,
-            result.success,
-            result.message ?: result.error ?: "Unknown",
-            mapOf(
-                "action" to "install_certificate",
-                "alias" to alias,
-                "type" to type
-            )
-        )
-    }
-
     private fun handleListNotifications(context: Context) {
         // Optional filter params from the command file (sinceMs, packageFilter, limit).
         val cfg = readConfigFile(commandFile(context))
@@ -244,21 +191,6 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                 "action" to "notification_status",
                 "listenerConnected" to NotificationCaptureService.listenerConnected,
                 "capturedCount" to NotificationCaptureService.captured.size
-            )
-        )
-    }
-
-    private fun handleListCertificates(context: Context) {
-        val certManager = CertificateManager(context)
-        val certificates = certManager.listCertificates()
-
-        writeResult(
-            context,
-            true,
-            "Found ${certificates.size} certificates",
-            mapOf(
-                "action" to "list_certificates",
-                "certificates" to certificates
             )
         )
     }

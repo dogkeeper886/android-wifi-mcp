@@ -5,7 +5,6 @@ import {
   EapConfig,
   EapMethod,
   EnterpriseConnectionResult,
-  CertificateInstallResult,
 } from '../types.js';
 
 export class EnterpriseWifiCommands {
@@ -146,67 +145,6 @@ export class EnterpriseWifiCommands {
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
     }
   }
-
-  /**
-   * Install a certificate for enterprise WiFi
-   */
-  async installCertificate(
-    certificate: string,
-    alias: string,
-    type: 'ca' | 'client'
-  ): Promise<CertificateInstallResult> {
-    if (!(await this.isCompanionAppInstalled())) {
-      return {
-        success: false,
-        alias,
-        type,
-        error: `Companion app not installed. Please install ${COMPANION_PACKAGE}`,
-      };
-    }
-
-    const payload = {
-      action: 'install_certificate',
-      timestamp: Date.now(),
-      certificate,
-      alias,
-      type,
-    };
-    const { raw, broadcastError } = await this.bridge.sendBroadcastAndWait('INSTALL_CERTIFICATE', payload);
-
-    if (broadcastError) {
-      return {
-        success: false,
-        alias,
-        type,
-        error: `Failed to send broadcast: ${broadcastError}`,
-      };
-    }
-    if (!raw) {
-      return {
-        success: false,
-        alias,
-        type,
-        error: 'Timeout waiting for certificate installation result',
-      };
-    }
-
-    return normalizeCertificateResult(raw, alias, type);
-  }
-
-  /**
-   * Get list of installed certificates (via companion app)
-   */
-  async listCertificates(): Promise<string[]> {
-    if (!(await this.isCompanionAppInstalled())) {
-      return [];
-    }
-
-    const payload = { action: 'list_certificates', timestamp: Date.now() };
-    const { raw } = await this.bridge.sendBroadcastAndWait('LIST_CERTIFICATES', payload);
-    if (!raw) return [];
-    const certs = raw.certificates;
-    return Array.isArray(certs) ? (certs as string[]) : [];
-  }
 }
 
 /**
@@ -268,20 +206,6 @@ export function serverValidationError(config: EapConfig): string | null {
     return 'Enterprise WiFi on Android 11+ requires server-certificate validation. Provide caCertificate and/or domainSuffixMatch.';
   }
   return null;
-}
-
-function normalizeCertificateResult(
-  raw: Record<string, unknown>,
-  fallbackAlias: string,
-  fallbackType: 'ca' | 'client'
-): CertificateInstallResult {
-  const success = !!raw.success;
-  return {
-    success,
-    alias: typeof raw.alias === 'string' ? raw.alias : fallbackAlias,
-    type: raw.type === 'ca' || raw.type === 'client' ? raw.type : fallbackType,
-    error: success ? undefined : pickErrorMessage(raw),
-  };
 }
 
 /** Prefer companion's `error` over `message`; fall back to a generic string. */
