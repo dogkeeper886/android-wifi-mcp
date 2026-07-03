@@ -36,3 +36,6 @@ The result is a feature that looks like it works but can't be relied on for the 
 - Created: 2026-06-30
 - Issues: #69, #70, #71, #72 (technical breakdown; #73 closed — folded into #69)
 - Test plan: #109 → test docs in `docs/tests/STORY-002/` (TS-01..05)
+- Enterprise (802.1X) e2e test ownership (#132): owned by the STORY-005 enterprise suite
+  (`cicd/tests/testcases/enterprise/TC-ENT-001.yml`, CI-green), which realizes the to-be
+  enterprise scenarios TS-01/TS-03/TS-05. WPA3-Enterprise (TS-04) remains #72.
