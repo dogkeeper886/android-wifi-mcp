@@ -10,6 +10,16 @@ import { ERROR_PATTERNS, ERROR_EXCLUSIONS } from '../config.js';
 
 export class SimpleJudge {
   judge(result: TestResult): Judgment {
+    // A skipped case (an unmet `requires` precondition) is green — it did not run,
+    // so there's nothing to fail. The reason names the missing precondition.
+    if (result.skipped) {
+      return {
+        testId: result.testCase.id,
+        pass: true,
+        reason: `SKIPPED: ${result.skipReason ?? 'precondition not met'}`,
+      };
+    }
+
     const reasons: string[] = [];
     let pass = true;
 
