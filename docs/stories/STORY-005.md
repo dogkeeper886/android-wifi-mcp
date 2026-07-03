@@ -59,6 +59,7 @@ what happened to be on the phone beforehand, which is the opposite of a trustwor
 ## Status
 
 - Created: 2026-07-03
+- Delivered: 2026-07-03
 - Plan: #165
-- Issues: #166 (schema), #167 (executor), #168 (device-state), #169 (adopt in cases)
-- Motivating bug: #164
+- Issues: #166 (schema), #167 (executor), #168 (device-state), #169 (adopt in cases) — all merged
+- Motivating bug: #164 — test side closed by #169 (enterprise connect reliable via self-contained setup)
