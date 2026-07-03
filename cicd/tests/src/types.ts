@@ -11,6 +11,13 @@ export interface TestStep {
   capture?: Record<string, string>;
 }
 
+/** A precondition a case needs before it runs. Checked before setup; when unmet the
+ *  case skips (green) rather than failing deep in a step. Extend as new kinds appear. */
+export interface TestRequires {
+  /** SSID that must be in range (scan-confirmed) before the case runs. */
+  ssidInRange?: string;
+}
+
 export interface TestCase {
   id: string;
   name: string;
@@ -19,7 +26,15 @@ export interface TestCase {
   priority: number;
   timeout: number;
   dependencies: string[];
+  /** Precondition checked before `setup` — unmet → the case is skipped. */
+  requires?: TestRequires;
+  /** Steps run before `steps` to bring the device to a known-clean starting state.
+   *  Same shape as `steps`, run through the same substitute→execute path. */
+  setup?: TestStep[];
   steps: TestStep[];
+  /** Steps run after `steps` — ALWAYS, even after a failed step — to remove what the
+   *  case created and return the device to its pre-test state. */
+  teardown?: TestStep[];
   criteria: string;
   goal?: string;
   /** Judge style (STORY-003 #125). 'simple' (default) = deterministic checks only —

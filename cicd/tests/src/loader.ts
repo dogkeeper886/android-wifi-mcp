@@ -7,7 +7,7 @@ import { readFileSync } from 'fs';
 import { glob } from 'glob';
 import yaml from 'js-yaml';
 import path from 'path';
-import { TestCase, TestStep } from './types.js';
+import { TestCase, TestStep, TestRequires } from './types.js';
 import { SUITES, CONFIG } from './config.js';
 
 /** Normalize a testcase's `judge` field. 'agent' opts into the agent judge; 'simple'
@@ -165,25 +165,35 @@ export class TestLoader {
       return null;
     }
 
-    const steps: TestStep[] = [];
-    for (const step of raw.steps) {
-      if (!step.name || typeof step.name !== 'string') {
-        console.error(`${filePath}: step missing 'name' field`);
-        return null;
-      }
-      if (!step.command || typeof step.command !== 'string') {
-        console.error(`${filePath}: step '${step.name}' missing 'command' field`);
-        return null;
-      }
+    // `steps` (required, non-empty) plus optional `setup`/`teardown` phases — all
+    // step-arrays, validated the same way so setup/teardown behave exactly like steps.
+    const steps = this.normalizeSteps(raw.steps, filePath, 'steps');
+    if (!steps) return null;
 
-      steps.push({
-        name: step.name,
-        command: step.command,
-        timeout: typeof step.timeout === 'number' ? step.timeout : undefined,
-        expectPatterns: Array.isArray(step.expectPatterns) ? step.expectPatterns : undefined,
-        rejectPatterns: Array.isArray(step.rejectPatterns) ? step.rejectPatterns : undefined,
-        capture: typeof step.capture === 'object' && step.capture !== null ? step.capture : undefined,
-      });
+    let setup: TestStep[] | undefined;
+    if (raw.setup !== undefined) {
+      const parsed = this.normalizeSteps(raw.setup, filePath, 'setup');
+      if (!parsed) return null;
+      setup = parsed;
+    }
+
+    let teardown: TestStep[] | undefined;
+    if (raw.teardown !== undefined) {
+      const parsed = this.normalizeSteps(raw.teardown, filePath, 'teardown');
+      if (!parsed) return null;
+      teardown = parsed;
+    }
+
+    let requires: TestRequires | undefined;
+    if (raw.requires !== undefined) {
+      if (typeof raw.requires !== 'object' || raw.requires === null || Array.isArray(raw.requires)) {
+        console.error(`${filePath}: 'requires' must be an object`);
+        return null;
+      }
+      const r = raw.requires as Record<string, unknown>;
+      requires = {
+        ssidInRange: typeof r.ssidInRange === 'string' ? r.ssidInRange : undefined,
+      };
     }
 
     return {
@@ -194,9 +204,47 @@ export class TestLoader {
       priority: typeof raw.priority === 'number' ? raw.priority : 1,
       timeout: typeof raw.timeout === 'number' ? raw.timeout : CONFIG.defaultTimeout,
       dependencies: Array.isArray(raw.dependencies) ? raw.dependencies : [],
+      requires,
+      setup,
       steps,
+      teardown,
       criteria: typeof raw.criteria === 'string' ? raw.criteria : '',
+      goal: typeof raw.goal === 'string' ? raw.goal : undefined,
       judge: normalizeJudge(raw.judge),
     };
+  }
+
+  /** Validate + normalize a step-array (used for `steps`, `setup`, and `teardown`).
+   *  Returns null on the first invalid step so the caller can bail. `label` names the
+   *  phase in error messages. */
+  private normalizeSteps(
+    raw: unknown,
+    filePath: string,
+    label: string
+  ): TestStep[] | null {
+    if (!Array.isArray(raw)) {
+      console.error(`${filePath}: '${label}' must be an array`);
+      return null;
+    }
+    const steps: TestStep[] = [];
+    for (const step of raw as Array<Record<string, unknown>>) {
+      if (!step.name || typeof step.name !== 'string') {
+        console.error(`${filePath}: ${label} step missing 'name' field`);
+        return null;
+      }
+      if (!step.command || typeof step.command !== 'string') {
+        console.error(`${filePath}: ${label} step '${step.name}' missing 'command' field`);
+        return null;
+      }
+      steps.push({
+        name: step.name,
+        command: step.command,
+        timeout: typeof step.timeout === 'number' ? step.timeout : undefined,
+        expectPatterns: Array.isArray(step.expectPatterns) ? (step.expectPatterns as string[]) : undefined,
+        rejectPatterns: Array.isArray(step.rejectPatterns) ? (step.rejectPatterns as string[]) : undefined,
+        capture: typeof step.capture === 'object' && step.capture !== null ? (step.capture as Record<string, string>) : undefined,
+      });
+    }
+    return steps;
   }
 }
