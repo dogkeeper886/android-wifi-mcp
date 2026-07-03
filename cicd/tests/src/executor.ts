@@ -7,11 +7,12 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { TestCase, TestResult, StepResult, PatternMatch, RunConfig } from './types.js';
+import { TestCase, TestResult, StepResult, TestStep, PatternMatch, RunConfig } from './types.js';
 import { CONFIG } from './config.js';
 import {
   snapshotDeviceState,
   restoreDeviceState,
+  ensureSsidInRange,
   DeviceSnapshot,
 } from './device-state.js';
 
@@ -213,6 +214,81 @@ export class TestExecutor {
     return { expected, rejected };
   }
 
+  /**
+   * Run a phase's steps (setup / step / teardown), pushing each StepResult into `into`.
+   * Each step gets the same treatment as the main loop — `{{VAR}}` substitution, pattern
+   * checks, capture, progress. Returns whether every step passed. With `stopOnFailure`
+   * (default true) it bails on the first failure (setup/steps abort); teardown passes
+   * `false` so every cleanup step runs regardless.
+   */
+  private async runPhase(
+    steps: TestStep[],
+    testCase: TestCase,
+    into: StepResult[],
+    phaseLabel: string,
+    stopOnFailure = true
+  ): Promise<boolean> {
+    let allOk = true;
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
+      const stepTimestamp = new Date().toISOString().substring(11, 19);
+      const label = phaseLabel === 'step' ? 'Step' : phaseLabel;
+      this.progress(`  [${stepTimestamp}] ${label} ${i + 1}/${steps.length}: ${step.name}`);
+
+      let resolvedCommand: string;
+      try {
+        resolvedCommand = this.substituteVariables(step.command);
+      } catch (e) {
+        const msg = (e as Error).message;
+        into.push({
+          name: step.name,
+          command: step.command,
+          stdout: '',
+          stderr: `[SUBSTITUTION FAILED] ${msg}`,
+          exitCode: 1,
+          duration: 0,
+        });
+        this.progress(`    [FAIL] Substitution: ${msg}`);
+        allOk = false;
+        if (stopOnFailure) return false;
+        continue;
+      }
+
+      const cmdPreview =
+        resolvedCommand.length > 80 ? resolvedCommand.substring(0, 80) + '...' : resolvedCommand;
+      this.progress(`    Command: ${cmdPreview}`);
+
+      const resolvedStep = { ...step, command: resolvedCommand };
+      const result = await this.executeStep(resolvedStep, testCase.timeout);
+      result.patternMatches = this.checkPatterns(result, step.expectPatterns, step.rejectPatterns);
+      this.captureVariables(step, result);
+      into.push(result);
+
+      const status = result.exitCode === 0 ? '[PASS]' : '[FAIL]';
+      this.progress(`    ${status} Exit: ${result.exitCode} (${(result.duration / 1000).toFixed(1)}s)`);
+
+      if (result.patternMatches) {
+        const expectedMissing = result.patternMatches.expected.filter((p) => !p.found);
+        const rejectedFound = result.patternMatches.rejected.filter((p) => p.found);
+        if (expectedMissing.length > 0) {
+          this.progress(`    Missing patterns: ${expectedMissing.map((p) => p.pattern).join(', ')}`);
+        }
+        if (rejectedFound.length > 0) {
+          this.progress(`    Rejected patterns found: ${rejectedFound.map((p) => p.pattern).join(', ')}`);
+        }
+      }
+      if (result.exitCode !== 0 && result.stderr) {
+        this.progress(`    Error: ${result.stderr.split('\n')[0].substring(0, 100)}`);
+      }
+
+      if (result.exitCode !== 0) {
+        allOk = false;
+        if (stopOnFailure) return false;
+      }
+    }
+    return allOk;
+  }
+
   async executeTestCase(testCase: TestCase): Promise<TestResult> {
     const startTime = Date.now();
     const stepResults: StepResult[] = [];
@@ -237,77 +313,50 @@ export class TestExecutor {
       this.progress(`    [WARN] Snapshot failed: ${(e as Error).message}`);
     }
 
-    for (let i = 0; i < testCase.steps.length; i++) {
-      const step = testCase.steps[i];
-      const stepTimestamp = new Date().toISOString().substring(11, 19);
-
-      this.progress(
-        `  [${stepTimestamp}] Step ${i + 1}/${testCase.steps.length}: ${step.name}`
-      );
-
-      let resolvedCommand: string;
-      try {
-        resolvedCommand = this.substituteVariables(step.command);
-      } catch (e) {
-        const msg = (e as Error).message;
-        const synthetic: StepResult = {
-          name: step.name,
-          command: step.command,
-          stdout: '',
-          stderr: `[SUBSTITUTION FAILED] ${msg}`,
-          exitCode: 1,
-          duration: 0,
+    // --- requires: precondition gate. Unmet → skip (green), don't fail deep in a step.
+    if (testCase.requires?.ssidInRange) {
+      const ssid = this.substituteVariables(testCase.requires.ssidInRange);
+      const inRange = await ensureSsidInRange(ssid);
+      if (!inRange) {
+        this.progress(`    [SKIP] requires: SSID "${ssid}" not in range`);
+        if (snapshot) {
+          await restoreDeviceState(snapshot).catch(() => {});
+        }
+        this.currentTestId = null;
+        return {
+          testCase,
+          steps: [],
+          totalDuration: Date.now() - startTime,
+          logs: `SKIPPED: requires ssidInRange "${ssid}" not in range`,
+          logFile: '',
+          skipped: true,
+          skipReason: `ssidInRange "${ssid}" not in range`,
         };
-        this.progress(`    [FAIL] Substitution: ${msg}`);
-        stepResults.push(synthetic);
-        continue;
       }
+    }
 
-      const cmdPreview =
-        resolvedCommand.length > 80
-          ? resolvedCommand.substring(0, 80) + '...'
-          : resolvedCommand;
-      this.progress(`    Command: ${cmdPreview}`);
+    // --- setup: bring the device to a known-clean state. A setup failure aborts the
+    //     steps (the test's premise isn't established) but teardown still runs.
+    let setupOk = true;
+    if (testCase.setup && testCase.setup.length > 0) {
+      setupOk = await this.runPhase(testCase.setup, testCase, stepResults, 'setup');
+    }
 
-      const resolvedStep = { ...step, command: resolvedCommand };
-      const result = await this.executeStep(resolvedStep, testCase.timeout);
+    // --- steps: the assertions (skipped if setup failed).
+    if (setupOk) {
+      await this.runPhase(testCase.steps, testCase, stepResults, 'step');
+    }
 
-      result.patternMatches = this.checkPatterns(
-        result,
-        step.expectPatterns,
-        step.rejectPatterns
-      );
-
-      this.captureVariables(step, result);
-
-      stepResults.push(result);
-
-      const status = result.exitCode === 0 ? '[PASS]' : '[FAIL]';
-      const duration = `${(result.duration / 1000).toFixed(1)}s`;
-      this.progress(`    ${status} Exit: ${result.exitCode} (${duration})`);
-
-      if (result.patternMatches) {
-        const expectedMissing = result.patternMatches.expected.filter(
-          (p) => !p.found
+    // --- teardown: ALWAYS, even after a failed step. Remove what the case created.
+    //     Surfaced (logged + warned) but does NOT fail the test — cleanup ≠ assertion.
+    const teardownResults: StepResult[] = [];
+    if (testCase.teardown && testCase.teardown.length > 0) {
+      await this.runPhase(testCase.teardown, testCase, teardownResults, 'teardown', false);
+      const tdFailed = teardownResults.filter((r) => r.exitCode !== 0);
+      if (tdFailed.length > 0) {
+        this.progress(
+          `    [WARN] teardown step(s) failed (surfaced, not failing the test): ${tdFailed.map((r) => r.name).join(', ')}`
         );
-        const rejectedFound = result.patternMatches.rejected.filter(
-          (p) => p.found
-        );
-        if (expectedMissing.length > 0) {
-          this.progress(
-            `    Missing patterns: ${expectedMissing.map((p) => p.pattern).join(', ')}`
-          );
-        }
-        if (rejectedFound.length > 0) {
-          this.progress(
-            `    Rejected patterns found: ${rejectedFound.map((p) => p.pattern).join(', ')}`
-          );
-        }
-      }
-
-      if (result.exitCode !== 0 && result.stderr) {
-        const errorPreview = result.stderr.split('\n')[0].substring(0, 100);
-        this.progress(`    Error: ${errorPreview}`);
       }
     }
 
@@ -323,7 +372,7 @@ export class TestExecutor {
 
     const totalDuration = Date.now() - startTime;
 
-    const logs = stepResults
+    const logs = [...stepResults, ...teardownResults]
       .map(
         (r) =>
           `=== Step: ${r.name} ===

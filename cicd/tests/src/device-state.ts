@@ -32,6 +32,26 @@ async function adbShell(cmd: string, timeout = 15000): Promise<string> {
   return stdout;
 }
 
+/**
+ * Trigger a scan and confirm an SSID is currently in range. Best-effort: a throttled
+ * or failed scan still reads the cached results; returns false if nothing matches or
+ * the read fails. Used by a case's `requires.ssidInRange` precondition.
+ */
+export async function ensureSsidInRange(ssid: string, settleMs = 4000): Promise<boolean> {
+  try {
+    await adbShell('cmd wifi start-scan');
+  } catch {
+    // throttled/failed — fall through and read whatever is cached
+  }
+  await new Promise((resolve) => setTimeout(resolve, settleMs));
+  try {
+    const out = await adbShell('cmd wifi list-scan-results');
+    return out.split('\n').some((line) => line.includes(ssid));
+  } catch {
+    return false;
+  }
+}
+
 export async function snapshotDeviceState(): Promise<DeviceSnapshot> {
   const statusOut = await adbShell('cmd wifi status');
   const wifiEnabled = /wifi is enabled/i.test(statusOut);

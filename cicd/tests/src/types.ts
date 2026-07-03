@@ -67,6 +67,10 @@ export interface TestResult {
   totalDuration: number;
   logs: string;
   logFile: string;
+  /** Set when a `requires` precondition wasn't met — the case was skipped (counts
+   *  as green, not a failure). `skipReason` says which precondition was unmet. */
+  skipped?: boolean;
+  skipReason?: string;
 }
 
 export interface Judgment {
