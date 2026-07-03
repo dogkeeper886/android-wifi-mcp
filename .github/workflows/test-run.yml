@@ -36,6 +36,15 @@ jobs:
         env:
           TEST_DEVICE_SERIAL: ${{ secrets.TEST_DEVICE_SERIAL }}
           ADB_PATH: ${{ secrets.ADB_PATH }}
+          # WiFi lab fixtures — the wifi suite reads these as {{TEST_SSID_*}}. On a
+          # self-hosted-runner checkout there is no .env, so the fixtures must come from
+          # repo secrets here. Unset secrets are empty (harmless for suites that don't
+          # use them, e.g. smoke). Locally, .env supplies these instead.
+          TEST_SSID_OPEN: ${{ secrets.TEST_SSID_OPEN }}
+          TEST_SSID_WPA2: ${{ secrets.TEST_SSID_WPA2 }}
+          TEST_SSID_WPA2_PASSWORD: ${{ secrets.TEST_SSID_WPA2_PASSWORD }}
+          TEST_SSID_WPA3: ${{ secrets.TEST_SSID_WPA3 }}
+          TEST_SSID_WPA3_PASSWORD: ${{ secrets.TEST_SSID_WPA3_PASSWORD }}
           # Judge mode + agent auth (STORY-003). In 'dual', tests marked `judge: agent`
           # also run the ACP agent judge; if the token/agent is absent it degrades to
           # deterministic verdicts (never a mass failure).

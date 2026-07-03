@@ -6,8 +6,8 @@ name: "Test: WiFi"
 #
 # Lab setup on the self-hosted runner:
 #   - repo variable  WIFI_LAB = true                 (arms this workflow)
-#   - repo secrets   TEST_SSID_WPA2 / _PASSWORD, TEST_SSID_OPEN, TEST_DEVICE_SERIAL,
-#                    CLAUDE_CODE_OAUTH_TOKEN         (test data + agent-judge auth)
+#   - repo secrets   TEST_SSID_OPEN, TEST_SSID_WPA2 / _PASSWORD, TEST_SSID_WPA3 / _PASSWORD,
+#                    TEST_DEVICE_SERIAL, CLAUDE_CODE_OAUTH_TOKEN   (test data + agent-judge auth)
 # Locally, `make test SUITE=wifi` (with TEST_SSID_* exported) stays the first-class path.
 
 on:
