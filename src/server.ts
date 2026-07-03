@@ -931,7 +931,7 @@ export function createMcpServer(
 
   mcpServer.tool(
     'proxy_restart',
-    'Tear down and respawn one upstream MCP subprocess by name (e.g. "playwright"). Use after a wifi_disconnect or any device-level event that breaks the upstream\'s cached state — @playwright/mcp keeps a closed Page handle and returns "Target page, context or browser has been closed" forever otherwise. Restoring adb forward alone is not enough; the cache lives in the upstream process memory.',
+    'Manually tear down and respawn one PROXIED upstream MCP subprocess by name (e.g. "playwright"). Rarely needed: the proxy already auto-respawns an upstream when a call returns "Target page, context or browser has been closed" (a dead @playwright/mcp CDP Page handle after a wifi_disconnect / device event) and retries once. Use this as a manual backstop, or to force a clean restart. Only works for an upstream android-wifi spawned via UPSTREAM_MCP — a standalone playwright server (its own :8931) is not managed here; restart that server directly.',
     {
       name: z.string().describe('Upstream name as configured in UPSTREAM_MCP (e.g. "playwright")'),
     },

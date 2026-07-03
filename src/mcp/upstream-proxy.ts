@@ -148,10 +148,31 @@ export class UpstreamProxy {
       throw new Error(`Upstream '${upstreamName}' is not connected`);
     }
     const originalName = entry.toolNameMap.get(name) ?? name;
-    return await entry.client.callTool({
+    const result = await entry.client.callTool({
       name: originalName,
       arguments: args,
     });
+
+    // Auto-recover Mode-B: some upstreams (notably @playwright/mcp) cache a handle to
+    // remote state — a CDP `Page` — that dies on a device event (wifi_disconnect, sleep,
+    // activity replacement) and then return "Target page, context or browser has been
+    // closed" for every subsequent call. Respawning the subprocess is the only cure
+    // (restartOne). Detect it, restart the upstream, and retry ONCE — so the agent gets a
+    // fresh result instead of having to call proxy_restart by hand. Best-effort: if the
+    // restart or retry fails, fall back to the original error result.
+    if (isTargetClosedResult(result)) {
+      try {
+        await this.restartOne(upstreamName);
+        const fresh = this.upstreams.get(upstreamName);
+        if (fresh?.client) {
+          return await fresh.client.callTool({ name: originalName, arguments: args });
+        }
+      } catch {
+        // restart/retry failed — return the original closed-target result below
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -272,6 +293,21 @@ export class UpstreamProxy {
     });
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }
+}
+
+/**
+ * True when a tool result is the @playwright/mcp "dead CDP Page" error — the marker
+ * that the upstream needs respawning (see callTool's auto-recover). Scans the result's
+ * text content for the exact framework phrase.
+ */
+function isTargetClosedResult(result: unknown): boolean {
+  const content = (result as { content?: unknown })?.content;
+  if (!Array.isArray(content)) return false;
+  return content.some(
+    (part) =>
+      typeof (part as { text?: unknown })?.text === 'string' &&
+      /Target page, context or browser has been closed/i.test((part as { text: string }).text)
+  );
 }
 
 /**

@@ -40,7 +40,7 @@ claude mcp add --transport stdio android-wifi -- node bin/android-wifi-shim.mjs 
 
 Now ask: *"list devices, scan WiFi, connect to `<ssid>`."* On Linux without root-level adb access, run `make udev` once.
 
-> **Requires** Node ≥ 18, `adb`, and an **Android 11+** device (the `cmd wifi` interface). The browser tools attach to **Chrome Canary** on the device — stable Chrome's DevTools socket is locked on many OEM builds ([why](docs/integrations/canary-cdp.md)).
+> **Requires** Node ≥ 18, `adb`, and an **Android 11+** device (the `cmd wifi` interface). The browser tools attach to **Chrome Canary** on the device — stable Chrome's DevTools socket is locked on many OEM builds.
 
 ## The tools
 
@@ -122,10 +122,8 @@ make psql                   # inspect — or use the query_log tool
 
 ## Documentation
 
-- [`docs/integrations/canary-cdp.md`](docs/integrations/canary-cdp.md) — driving the device browser via Chrome Canary + CDP
 - [`docs/stories/`](docs/stories/) — user stories (the *need* behind features)
 - [`docs/tests/`](docs/tests/) — acceptance test scenarios (TS-01…07)
-- [`docs/integrations/uiautomator-retry.md`](docs/integrations/uiautomator-retry.md) — UI-dump null-root retry reference
 
 ## Development
 
