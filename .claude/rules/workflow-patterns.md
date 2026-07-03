@@ -33,9 +33,11 @@ NOT apply to a bare `workflow_dispatch`, so forward with a fallback:
 exposes a `simple`/`dual` choice and passes it through (`ci.yml` → `test-<suite>.yml` →
 `test-run.yml`). In `dual`, only cases marked `judge: agent` pay for the agent judge.
 
-**Lab gating:** suites that need real hardware (e.g. `wifi`) must not run on a runner
-that lacks it. Gate the job on a repo variable — `if: ${{ vars.WIFI_LAB == 'true' }}` —
-so it **skips cleanly** (green, not failed) until the lab is armed. See `test-wifi.yml`.
+**Lab suites:** suites that need real hardware (e.g. `wifi`, `enterprise`) are manual
+(`workflow_dispatch`) — you run them only on a runner that has the lab. No job-level
+gate: individual cases self-skip (green) via `requires: ssidInRange` when their AP or
+fixture is absent (STORY-005), which is finer-grained than an all-or-nothing job gate
+and avoids a whole-suite silent-skip. See `test-wifi.yml`.
 
 ## Environment (repository Variables / Secrets → Actions)
 

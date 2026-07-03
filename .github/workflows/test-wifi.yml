@@ -1,11 +1,11 @@
 name: "Test: WiFi"
 
 # The wifi suite mutates the radio and connects to real networks, so it needs a lab
-# access point + credentials. It is NOT part of the default CI (ci.yml runs smoke); run
-# it explicitly, and it self-skips unless the lab is marked ready.
+# access point + credentials. It is NOT part of the default CI; run it explicitly on a
+# runner that has the lab. Individual cases self-skip (green) when their AP or fixture is
+# absent (requires: ssidInRange), so no job-level gate is needed.
 #
 # Lab setup on the self-hosted runner:
-#   - repo variable  WIFI_LAB = true                 (arms this workflow)
 #   - repo secrets   TEST_SSID_OPEN, TEST_SSID_WPA2 / _PASSWORD, TEST_SSID_WPA3 / _PASSWORD,
 #                    TEST_DEVICE_SERIAL, CLAUDE_CODE_OAUTH_TOKEN   (test data + agent-judge auth)
 # Locally, `make test SUITE=wifi` (with TEST_SSID_* exported) stays the first-class path.
@@ -30,8 +30,6 @@ on:
 
 jobs:
   test:
-    # Skip cleanly (green, not failed) unless the lab is armed — no device/secrets → no run.
-    if: ${{ vars.WIFI_LAB == 'true' }}
     uses: ./.github/workflows/test-run.yml
     with:
       tag: wifi

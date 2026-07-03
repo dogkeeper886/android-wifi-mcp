@@ -3,10 +3,10 @@ name: "Test: Enterprise (EAP-TLS)"
 # The enterprise suite connects to a real 802.1X (WPA2/3-Enterprise) network via the
 # companion app's WifiNetworkSuggestion, so it needs a lab RADIUS-backed AP + EAP-TLS
 # fixtures AND a one-time manual grant on the runner phone. It is NOT part of the default
-# CI (ci.yml runs smoke); run it explicitly, and it self-skips unless the lab is armed.
+# CI; run it explicitly on a runner that has the lab. The single case self-skips (green)
+# when its AP or fixtures are absent (requires: ssidInRange), so no job-level gate is needed.
 #
 # Lab setup on the self-hosted runner:
-#   - repo variable  ENTERPRISE_LAB = true            (arms this workflow)
 #   - repo secrets   TEST_SSID_ENTERPRISE, TEST_EAP_IDENTITY, TEST_EAP_DOMAIN,
 #                    TEST_EAP_CLIENT_CERT, TEST_EAP_PRIVATE_KEY, TEST_EAP_CA_CERT,
 #                    TEST_DEVICE_SERIAL, CLAUDE_CODE_OAUTH_TOKEN
@@ -36,9 +36,6 @@ on:
 
 jobs:
   test:
-    # Skip cleanly (green, not failed) unless the enterprise lab is armed — no AP/certs/
-    # phone approval → no run.
-    if: ${{ vars.ENTERPRISE_LAB == 'true' }}
     uses: ./.github/workflows/test-run.yml
     with:
       tag: enterprise
