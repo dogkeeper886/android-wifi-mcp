@@ -14,8 +14,9 @@ status: green
 associated** to the target SSID — confirmed independently, not assumed from "config
 accepted" — and the test leaves the device in its original state.
 
-TC-01 and TC-03 are bound and run green against a lab AP (proven with `TEST_SSID_WPA2`).
-TC-02 (failed connect) and TC-04 (cleanup, a runner mechanism) have no single script yet — **(to-be)**.
+TC-01/03/05/06 are bound and run green against a lab AP (WPA2, open, and WPA3/SAE security
+types). TC-02 (failed connect) and TC-04 (cleanup, a runner mechanism) have no single
+script yet — **(to-be)**.
 
 ## TC-01 — success means associated
 
@@ -44,3 +45,19 @@ TC-02 (failed connect) and TC-04 (cleanup, a runner mechanism) have no single sc
 | Action | Expected Result |
 |---|---|
 | After the test completes (pass or fail) | The network added during the test is forgotten and the prior WiFi enabled-state is restored — no residue for the next test |
+
+## TC-05 — an open network connect means associated
+
+**Script:** cicd/tests/testcases/wifi/TC-WIFI-003.yml
+
+| Action | Expected Result |
+|---|---|
+| Connect to an open (no-password) SSID | The result reports the device **associated** to that SSID, confirmed out of band via `wifi_status` |
+
+## TC-06 — a WPA3 (SAE) connect means associated
+
+**Script:** cicd/tests/testcases/wifi/TC-WIFI-006.yml
+
+| Action | Expected Result |
+|---|---|
+| Connect to a WPA3/SAE SSID with the correct password | The result reports the device **associated** (SAE), confirmed out of band — not merely "configuration accepted" |
