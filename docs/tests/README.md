@@ -46,7 +46,6 @@ id: TS-NN                 # scenario id
 title: <scenario title>
 namespace: <feature group>
 story: STORY-XXX          # the need this verifies
-story_hash: <sha256 of docs/stories/STORY-XXX.md>   # detects story drift
 plan: <N>                 # the [STORY-XXX] Test Plan issue (scenario source)
 issue: <N>                # related dev issue (the "how"), if any
 status: green             # doc standing: green = current/valid
@@ -54,5 +53,6 @@ binding: manual           # optional — the whole scenario is verified by hand 
 ---
 ```
 
-If `story_hash` no longer matches the story file, the story moved under the
-test — re-check the scenario before trusting it.
+Traceability is checked structurally by `qw-drift` (`npm run drift`) — tool → doc →
+script → workflow, each link resolved by existence (no hash). Whether a doc still covers
+its story's Success-Looks-Like is a human read there, not an automated check.

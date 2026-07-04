@@ -32,7 +32,7 @@ Fits in the qa-workflow:
         │
         ├─► Step 2: One file per scenario
         │   - Create docs/tests/TS-NN-<slug>.md with front-matter:
-        │       id, title, namespace, story (+ story_hash = sha256 of the story file),
+        │       id, title, namespace, story,
         │       plan: <plan> (the test-plan issue number — omit when there is none),
         │       issue, status: green
         │   - (Format and field meanings: docs/tests/README.md.)
@@ -55,7 +55,6 @@ Fits in the qa-workflow:
 
 - Reuse is optional: if the project has a reuse index, query it for a vetted case or
   step before authoring a near-duplicate, so coverage converges instead of duplicating.
-- `story_hash`: `sha256sum docs/stories/STORY-XXX.md`.
 - `plan`: the `[STORY-XXX] Test Plan` issue number — the scenario source and the trace
   back (see docs/tests/README.md). Absent for ad-hoc tests written without a plan.
 - Producer paired with `/qw-review-cases`.

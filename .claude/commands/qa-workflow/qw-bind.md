@@ -43,7 +43,7 @@ Fits in the qa-workflow:
         ├─► Generate a scaffold from the YAML:
         │     npm --prefix cicd/tests run port-yaml -- <yaml> > docs/tests/STORY-XXX/TS-NN-<slug>.md
         │   The scaffold carries the steps and the `**Script:**` binding; objective,
-        │   expected results, story link, namespace, and story_hash are TODOs.
+        │   expected results, story link, and namespace are TODOs.
         └─► Fill the TODOs (format contract: docs/tests/README.md), then `/qw-review-bind`.
 
 ---
@@ -51,6 +51,5 @@ Fits in the qa-workflow:
 ## API Notes
 
 - `port-yaml` is a scaffolder, not a translator — a human/agent fills meaning.
-- `story_hash` = `sha256sum docs/stories/STORY-XXX.md` (the drift anchor).
 - Producer paired with `/qw-review-bind` (the audit).
 ```

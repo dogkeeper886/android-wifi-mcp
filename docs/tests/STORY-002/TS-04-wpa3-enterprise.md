@@ -3,7 +3,6 @@ id: TS-04
 title: WPA3-Enterprise
 namespace: enterprise-wifi
 story: STORY-002
-story_hash: 875f03224823a642778e30a216471799c99e90c36a6ee7e8d231c0808d6e18b7
 plan: 109
 issue: 72
 status: green
@@ -13,14 +12,17 @@ status: green
 
 **Objective:** Connect to a WPA3-Enterprise SSID where the access point supports it.
 
-> **Pending a WPA3-Enterprise lab AP** — these cases run once such an AP is available;
-> until then they stay (to-be) rather than being asserted on WPA2 hardware.
+> TC-01 is bound and runs green against the WPA3-Enterprise lab AP (proven this session,
+> #72). TC-02 (192-bit / suite-B) stays (to-be) — the code path exists but no suite-B AP
+> is available to assert it on.
 
-## TC-01 — WPA3-Enterprise connect (to-be)
+## TC-01 — WPA3-Enterprise connect
+
+**Script:** cicd/tests/testcases/enterprise/TC-ENT-002.yml
 
 | Action | Expected Result |
 |---|---|
-| Connect to a WPA3-Enterprise SSID | The device associates using WPA3-Enterprise |
+| Connect to a WPA3-Enterprise SSID (`securityType: wpa3-eap`) | The device associates using WPA3-Enterprise, confirmed out of band via `wifi_status` |
 
 ## TC-02 — WPA3-Enterprise 192-bit / suite-B (to-be)
 

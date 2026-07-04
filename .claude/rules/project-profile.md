@@ -66,8 +66,7 @@ project's choice.
 ## Front-matter & format contract (test docs)
 
 - test-doc layout: per-story subfolder `docs/tests/STORY-XXX/TS-NN-<slug>.md` — `TS-NN` restarts per story; ad-hoc tests → `docs/tests/<subject>/TS-NN-<slug>.md`
-- front-matter fields: `id, title, namespace, story, story_hash, plan, issue, status`
-- story hash: `sha256` of the story file (`sha256sum`)
+- front-matter fields: `id, title, namespace, story, plan, issue, status`
 - default status: `green`
 
 ## Docs & diagrams
