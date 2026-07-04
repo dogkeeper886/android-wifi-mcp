@@ -90,3 +90,9 @@ All cases are bound and run green in the smoke suite against an attached device.
 | Action | Expected Result |
 |---|---|
 | Select a device by its serial | The named device becomes the active target for subsequent tool calls |
+
+## TC-10 — device_info reports the device's real Android version (to-be)
+
+| Action | Expected Result |
+|---|---|
+| Read device info | Reports a real SDK / Android version for the connected device (SDK ≥ 30) — verified against the actual device, not just field presence. The prior shape-only test was removed; a meaningful assertion is still to write. |
