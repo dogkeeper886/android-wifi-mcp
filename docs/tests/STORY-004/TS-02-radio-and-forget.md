@@ -3,7 +3,6 @@ id: TS-02
 title: Radio controls and forget do what they say
 namespace: wifi
 story: STORY-004
-story_hash: ecc52dc3d9f6ce59597ff8fd9e041a04bd35c5ad3423062c086b064a6f521fa0
 plan: 120
 issue: 128
 status: green

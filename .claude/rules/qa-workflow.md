@@ -27,7 +27,7 @@ from a reviewed test plan, then **bound** to the `cicd/tests` runner and kept fr
    [ run the suite: make test / cicd runner ]
             │
             ▼
-   qw-drift                             freshness gate — story_hash + binding audit
+   qw-drift                             chain gate — tool → doc → script → workflow (derived, no hash)
 ```
 
 ## The test-plan issue
@@ -43,7 +43,7 @@ reads it and records the issue number in each `TS-*.md` `plan:` field.
 | `qw-plan`  | `qw-review-plan`  | does the plan cover the story? |
 | `qw-cases` | `qw-review-cases` | each doc: one job, observable, traces back |
 | `qw-bind`  | `qw-review-bind`  | each case links to a resolving `**Script:**` |
-| —          | `qw-drift`        | story_hash + binding freshness (no producer — it *is* a review) |
+| —          | `qw-drift`        | the full chain resolves — tool→doc→script→workflow (no producer — it *is* a review) |
 
 No producer ships without a review covering its output.
 
@@ -61,6 +61,6 @@ The format a test doc must follow is `docs/tests/README.md`.
 ## Project-specific values
 
 The `docs/tests/` path, the `test-plan` label + colour, the `TS-`/`TC-` id schemes, the
-test-doc front-matter fields, the hash algorithm, and the default status are **not** owned
+test-doc front-matter fields, and the default status are **not** owned
 by the `qw-*` commands — they resolve from `.claude/rules/project-profile.md`. The values
 a command shows are the defaults; change them in the profile, not the command.

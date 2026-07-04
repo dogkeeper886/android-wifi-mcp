@@ -1,20 +1,21 @@
-# Check for Test Drift
+# Check the Traceability Chain
 
 ```
-Surface every test doc that no longer matches what it verifies — before a stale test
-passes quietly and a green build lies.
+Surface every break or gap in the chain — tool → test doc → test script → workflow —
+before a missing link lets a green build lie about coverage.
 
-Target: every test doc under docs/tests/ (runs in CI and on demand).
+Target: the whole chain, derived from the books the repo already keeps (runs in CI and on demand).
 
 ## PURPOSE
 
-The freshness gate of the qa-workflow, and a review in its own right (no paired
-producer — it checks the whole set). Drift is silent until something looks; this looks,
-deterministically, every run.
+The chain gate of the qa-workflow, and a review in its own right (no paired producer —
+it checks the whole set). It resolves every link by existence/reference — no story hash,
+no coverage file — so a revert (deleting or renaming a story, doc, script, or workflow)
+trips it. Story *meaning* drift stays a human read here, not an automated hash.
 
 Fits in the qa-workflow:
 
-    … qw-bind → qw-review-bind → [run] → qw-drift ──► back to qw-cases / qw-bind when stale
+    … qw-bind → qw-review-bind → [run] → qw-drift ──► back to qw-cases / qw-bind on a gap
 
 ---
 
@@ -23,25 +24,37 @@ Fits in the qa-workflow:
     /qw-drift
         │
         ├─► Run the gate:  npm --prefix cicd/tests run drift
-        │   Two deterministic signals:
-        │     - STALE   — the linked story's sha256 no longer matches the doc's
-        │                 `story_hash` (the story moved since the test was synced).
-        │     - UNBOUND — a case has no resolving `**Script:**` and is not `(to-be)`
-        │                 and its doc is not `binding: manual` (reuses the bind audit).
-        │   Exits non-zero if anything is stale or unbound (so CI fails on drift).
+        │   Five deterministic signals, each derived from the books (src/server.ts, the
+        │   YAML cases, the docs, the stories, the workflows):
+        │     - UNCOVERED — a tool in src/server.ts is run by no YAML case (tool → script).
+        │     - NO-STORY  — a doc's `story:` is missing or its story file doesn't exist.
+        │     - UNBOUND   — a case has no resolving `**Script:**` and isn't `(to-be)` /
+        │                   `binding: manual` (reuses the bind audit).
+        │     - NO-WF     — a suite a YAML declares has no .github/workflows/test-<suite>.yml.
+        │     - ORPHAN    — a YAML case is bound by no test doc.
+        │   Exits non-zero on any gap (so CI fails on a broken or incomplete chain).
+        │
+        ├─► Then the read a hash can't do:
+        │   For each doc, skim that its cases still cover the story's "Success Looks Like".
+        │   Structure can resolve while meaning has drifted — flag any that no longer holds.
         │
         └─► On a finding:
-            - STALE: re-read the test against the changed story. If it still holds,
-              update `story_hash` (`sha256sum docs/stories/STORY-XXX.md`); if not, fix
-              the test via `/qw-cases` → `/qw-review-cases`.
-            - UNBOUND: bind it via `/qw-bind` → `/qw-review-bind`, or mark it `(to-be)`
-              / the doc `binding: manual` if that's the truth.
+            - UNCOVERED / ORPHAN / NO-WF — close the chain: write the missing case via
+              `/qw-cases` → `/qw-bind`, or add the `test-<suite>.yml` workflow.
+            - NO-STORY — fix the `story:` link (or restore the story).
+            - UNBOUND — bind via `/qw-bind` → `/qw-review-bind`, or mark `(to-be)` /
+              `binding: manual` if that's the truth.
+            - Meaning drift — fix the doc via `/qw-cases` → `/qw-review-cases`.
 
 ---
 
 ## API Notes
 
-- Hash-first is deterministic and needs no stack; it runs in CI and on demand.
+- All five checks are existence/reference — deterministic, no stack, no hashing; they run
+  in CI and on demand, and survive a revert (a deleted file breaks its link).
 - `(to-be)` cases and `binding: manual` docs are expected-unbound and never fail the gate.
+- The books are the source of truth: tools from `src/server.ts`, coverage from the YAML
+  `command:` lines, suites from the YAML `suite:`, workflows from `.github/workflows/` —
+  there is no coverage file to maintain.
 - No paired producer — `qw-drift` *is* a review (the qa-workflow pairing rule).
 ```
