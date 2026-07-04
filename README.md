@@ -95,7 +95,7 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 # open the app once; for notification OTPs, tap "Grant Notification Access"
 ```
 
-Then `wifi_connect_enterprise` (PEAP/TTLS/TLS) and `notifications_wait_for_otp` work; `wifi_check_companion_app` reports install + grant status. SMS OTPs (`sms_*`) need no app, but `content://sms/inbox` is locked down on some Samsung/OEM builds — fall back to notification capture there.
+Then `wifi_connect_enterprise` (PEAP/TTLS/TLS; WPA2- or WPA3-Enterprise via `securityType`) and `notifications_wait_for_otp` work; `wifi_check_companion_app` reports install + grant status. SMS OTPs (`sms_*`) need no app, but `content://sms/inbox` is locked down on some Samsung/OEM builds — fall back to notification capture there.
 
 ## Structured logging (optional, Postgres)
 

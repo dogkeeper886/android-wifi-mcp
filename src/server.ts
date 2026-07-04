@@ -5,7 +5,7 @@ import { NetworkCheck } from './network/network-check.js';
 import { EnterpriseWifiCommands } from './adb/enterprise-wifi.js';
 import { UpstreamProxy } from './mcp/upstream-proxy.js';
 import { runQuery, KNOWN_CLASSIFICATIONS } from './log/query.js';
-import { SecurityType, EapMethod, Phase2Method } from './types.js';
+import { SecurityType, EapMethod, Phase2Method, EapSecurityType } from './types.js';
 
 export interface CreateServerResult {
   server: McpServer;
@@ -541,6 +541,11 @@ export function createMcpServer(
     {
       ssid: z.string().describe('Network SSID'),
       eapMethod: z.enum(['peap', 'ttls', 'tls']).describe('EAP method'),
+      securityType: z
+        .enum(['wpa2-eap', 'wpa3-eap', 'wpa3-eap-192'])
+        .optional()
+        .default('wpa2-eap')
+        .describe('WPA enterprise security: wpa2-eap (default), wpa3-eap (WPA3-Enterprise), or wpa3-eap-192 (WPA3-Enterprise 192-bit / suite-B — requires EAP-TLS).'),
       identity: z.string().describe('Username or email for authentication'),
       domainSuffixMatch: z.string().optional().describe('RADIUS server domain to match (e.g. radius.corp.com). Optional when caCertificate is set.'),
       phase2Method: z
@@ -564,6 +569,7 @@ export function createMcpServer(
       const result = await enterpriseWifi.connectEnterprise({
         ssid: params.ssid,
         eapMethod: params.eapMethod as EapMethod,
+        securityType: params.securityType as EapSecurityType,
         phase2Method: params.phase2Method as Phase2Method,
         identity: params.identity,
         password: params.password,

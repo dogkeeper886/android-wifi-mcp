@@ -50,6 +50,7 @@ jobs:
           # secrets. Absent → the enterprise cases skip (requires ssidInRange) or fail cleanly;
           # other suites ignore them. Locally, .env supplies these instead.
           TEST_SSID_ENTERPRISE: ${{ secrets.TEST_SSID_ENTERPRISE }}
+          TEST_SSID_ENTERPRISE_WPA3: ${{ secrets.TEST_SSID_ENTERPRISE_WPA3 }}
           TEST_EAP_IDENTITY: ${{ secrets.TEST_EAP_IDENTITY }}
           TEST_EAP_DOMAIN: ${{ secrets.TEST_EAP_DOMAIN }}
           TEST_EAP_CLIENT_CERT: ${{ secrets.TEST_EAP_CLIENT_CERT }}

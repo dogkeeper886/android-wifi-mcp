@@ -1,0 +1,66 @@
+id: TC-ENT-002
+name: wifi_connect_enterprise WPA3-Enterprise (securityType wpa3-eap) associates, then disconnects
+suite: enterprise
+tags: [enterprise, connect, disconnect, wpa3]
+priority: 2
+timeout: 180000
+# Non-deterministic association; agent judge grades "actually on the WPA3-Enterprise SSID".
+judge: agent
+
+# Only run when the WPA3-Enterprise AP is on the air — otherwise skip (green).
+requires:
+  ssidInRange: "{{TEST_SSID_ENTERPRISE_WPA3}}"
+
+# Same self-contained setup as TC-ENT-001: forget the in-range saved test networks so the
+# suggestion (which ranks below saved networks, #164) wins auto-join.
+setup:
+  - name: Clear competing saved test networks so the enterprise suggestion wins auto-join
+    command: npx tsx cicd/tests/src/device-cli.ts clear-networks "{{TEST_SSID_OPEN}}" "{{TEST_SSID_WPA2}}" "{{TEST_SSID_WPA3}}"
+
+steps:
+  - name: Connect to the WPA3-Enterprise network via EAP-TLS (securityType wpa3-eap)
+    # Identical to TC-ENT-001 but adds securityType:"wpa3-eap" — the companion selects
+    # WifiNetworkSuggestion.Builder.setWpa3EnterpriseStandardModeConfig (#72).
+    command: |
+      args=$(jq -nc \
+        --arg ssid "$TEST_SSID_ENTERPRISE_WPA3" \
+        --arg id "$TEST_EAP_IDENTITY" \
+        --arg dom "$TEST_EAP_DOMAIN" \
+        --arg cc "$TEST_EAP_CLIENT_CERT" \
+        --arg pk "$TEST_EAP_PRIVATE_KEY" \
+        --arg ca "$TEST_EAP_CA_CERT" \
+        '{ssid:$ssid, securityType:"wpa3-eap", eapMethod:"tls", identity:$id, domainSuffixMatch:$dom, clientCertificate:$cc, privateKey:$pk, caCertificate:$ca, verifyTimeoutMs:45000}')
+      npx tsx cicd/tests/src/mcp-client.ts wifi_connect_enterprise "$args"
+    expectPatterns:
+      - "success.*true"
+      - "Connected to enterprise"
+    rejectPatterns:
+      - "isError"
+      - "Not a CA certificate"
+      - "unknown_ca"
+  - name: Confirm association out of band
+    command: npx tsx cicd/tests/src/mcp-client.ts wifi_status '{}'
+    expectPatterns:
+      - "connected.*true"
+      - "{{TEST_SSID_ENTERPRISE_WPA3}}"
+    rejectPatterns:
+      - "isError"
+  - name: Disconnect — wifi_disconnect_enterprise removes the suggestion
+    command: |
+      npx tsx cicd/tests/src/mcp-client.ts wifi_disconnect_enterprise "$(jq -nc --arg ssid "$TEST_SSID_ENTERPRISE_WPA3" '{ssid:$ssid}')"
+    expectPatterns:
+      - "success.*true"
+    rejectPatterns:
+      - "isError"
+
+teardown:
+  - name: Ensure the enterprise suggestion is removed
+    command: |
+      npx tsx cicd/tests/src/mcp-client.ts wifi_disconnect_enterprise "$(jq -nc --arg ssid "$TEST_SSID_ENTERPRISE_WPA3" '{ssid:$ssid}')" || true
+
+criteria: |
+  Covers WPA3-Enterprise (securityType wpa3-eap) end to end: the EAP-TLS connect actually
+  associates to the WPA3-Enterprise SSID (confirmed out of band via wifi_status), then
+  disconnect removes the suggestion. Same #164 setup-clear and `requires` skip as TC-ENT-001.
+  Preconditions: companion app installed + suggestion approval granted, a WPA3-Enterprise AP,
+  and TEST_SSID_ENTERPRISE_WPA3 / TEST_EAP_* fixtures.
