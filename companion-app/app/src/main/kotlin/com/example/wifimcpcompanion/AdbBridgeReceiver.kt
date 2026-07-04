@@ -72,6 +72,7 @@ class AdbBridgeReceiver : BroadcastReceiver() {
         val clientCertificate = config.optString("clientCertificate", null)
         val privateKey = config.optString("privateKey", null)
         val privateKeyPassword = config.optString("privateKeyPassword", null)
+        val securityType = config.optString("securityType", "wpa2-eap")
 
         val wifiManager = WifiEnterpriseManager(context)
 
@@ -83,7 +84,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                 domain = domainSuffixMatch,
                 caCertPem = caCertificate,
                 anonymousIdentity = anonymousIdentity,
-                phase2Method = wifiManager.getPhase2Method(phase2Method)
+                phase2Method = wifiManager.getPhase2Method(phase2Method),
+                securityType = securityType
             )
             "ttls" -> wifiManager.connectTtls(
                 ssid = ssid,
@@ -92,7 +94,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                 domain = domainSuffixMatch,
                 caCertPem = caCertificate,
                 anonymousIdentity = anonymousIdentity,
-                phase2Method = wifiManager.getPhase2Method(phase2Method)
+                phase2Method = wifiManager.getPhase2Method(phase2Method),
+                securityType = securityType
             )
             "tls" -> {
                 if (clientCertificate == null || privateKey == null) {
@@ -111,7 +114,8 @@ class AdbBridgeReceiver : BroadcastReceiver() {
                     clientCertPem = clientCertificate,
                     privateKeyPem = privateKey,
                     privateKeyPassword = privateKeyPassword,
-                    caCertPem = caCertificate
+                    caCertPem = caCertificate,
+                    securityType = securityType
                 )
             }
             else -> {

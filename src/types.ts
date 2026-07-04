@@ -58,10 +58,14 @@ export interface WifiConnectionResult {
 // EAP Types (for 802.1X enterprise WiFi via companion app)
 export type EapMethod = 'peap' | 'ttls' | 'tls';
 export type Phase2Method = 'mschapv2' | 'pap' | 'gtc' | 'none';
+// WPA enterprise security suite. Default wpa2-eap preserves existing behaviour;
+// wpa3-eap-192 (suite-B) requires EAP-TLS.
+export type EapSecurityType = 'wpa2-eap' | 'wpa3-eap' | 'wpa3-eap-192';
 
 export interface EapConfig {
   ssid: string;
   eapMethod: EapMethod;
+  securityType?: EapSecurityType;    // WPA2-Enterprise (default) / WPA3-Enterprise / WPA3-Ent 192-bit
   phase2Method?: Phase2Method;       // Required for PEAP/TTLS
   identity: string;                  // Username/email
   password?: string;                 // For PEAP/TTLS

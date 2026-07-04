@@ -45,7 +45,8 @@ class WifiEnterpriseManager(private val context: Context) {
         domain: String,
         caCertPem: String? = null,
         anonymousIdentity: String? = null,
-        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2
+        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2,
+        securityType: String = "wpa2-eap"
     ): ConnectionResult {
         return try {
             val enterpriseConfig = WifiEnterpriseConfig().apply {
@@ -58,7 +59,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 applyServerValidation(domain, caCertPem)
             }
 
-            addNetworkSuggestion(ssid, enterpriseConfig, "peap")
+            addNetworkSuggestion(ssid, enterpriseConfig, "peap", securityType)
         } catch (e: Exception) {
             Log.e(TAG, "PEAP connection failed", e)
             ConnectionResult(
@@ -80,7 +81,8 @@ class WifiEnterpriseManager(private val context: Context) {
         domain: String,
         caCertPem: String? = null,
         anonymousIdentity: String? = null,
-        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2
+        phase2Method: Int = WifiEnterpriseConfig.Phase2.MSCHAPV2,
+        securityType: String = "wpa2-eap"
     ): ConnectionResult {
         return try {
             val enterpriseConfig = WifiEnterpriseConfig().apply {
@@ -93,7 +95,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 applyServerValidation(domain, caCertPem)
             }
 
-            addNetworkSuggestion(ssid, enterpriseConfig, "ttls")
+            addNetworkSuggestion(ssid, enterpriseConfig, "ttls", securityType)
         } catch (e: Exception) {
             Log.e(TAG, "TTLS connection failed", e)
             ConnectionResult(
@@ -115,7 +117,8 @@ class WifiEnterpriseManager(private val context: Context) {
         clientCertPem: String,
         privateKeyPem: String,
         privateKeyPassword: String? = null,
-        caCertPem: String? = null
+        caCertPem: String? = null,
+        securityType: String = "wpa2-eap"
     ): ConnectionResult {
         return try {
             val clientCert = parseCertificate(clientCertPem)
@@ -131,7 +134,7 @@ class WifiEnterpriseManager(private val context: Context) {
                 applyServerValidation(domain, caCertPem)
             }
 
-            addNetworkSuggestion(ssid, enterpriseConfig, "tls")
+            addNetworkSuggestion(ssid, enterpriseConfig, "tls", securityType)
         } catch (e: Exception) {
             Log.e(TAG, "TLS connection failed", e)
             ConnectionResult(
@@ -176,20 +179,36 @@ class WifiEnterpriseManager(private val context: Context) {
     /**
      * Add network suggestion using WifiNetworkSuggestion API
      */
+    // setWpa3EnterpriseConfig is deprecated in API 33; used here only as the API 30-32
+    // fallback for standard WPA3-Enterprise, so suppress the warning for this function.
+    @Suppress("DEPRECATION")
     private fun addNetworkSuggestion(
         ssid: String,
         enterpriseConfig: WifiEnterpriseConfig,
-        eapMethod: String
+        eapMethod: String,
+        securityType: String
     ): ConnectionResult {
         // Clear any prior suggestion first — the app holds one enterprise network
         // at a time, and a stale one would compete during the next auto-join.
         clearAllSuggestions()
 
-        val suggestion = WifiNetworkSuggestion.Builder()
+        // Select the WPA enterprise security suite (#72). Default/unknown → WPA2-Enterprise,
+        // preserving prior behaviour. Standard WPA3-Enterprise uses the API-33 setter, falling
+        // back to the deprecated API-30 one below that; 192-bit / suite-B is API 30 (our minSdk).
+        val builder = WifiNetworkSuggestion.Builder()
             .setSsid(ssid)
-            .setWpa2EnterpriseConfig(enterpriseConfig)
             .setIsAppInteractionRequired(false)
-            .build()
+        when (securityType) {
+            "wpa3-eap" ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    builder.setWpa3EnterpriseStandardModeConfig(enterpriseConfig)
+                } else {
+                    builder.setWpa3EnterpriseConfig(enterpriseConfig)
+                }
+            "wpa3-eap-192" -> builder.setWpa3Enterprise192BitModeConfig(enterpriseConfig)
+            else -> builder.setWpa2EnterpriseConfig(enterpriseConfig)
+        }
+        val suggestion = builder.build()
 
         val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
 
