@@ -20,7 +20,7 @@ in current best practice, leading with the few ideas worth a diagram, and true t
         │                    └─ reuses reviewing-phrasing + reviewing-typography,
         │                       then verifies every claim against the code
         ▼
-   README.md (+ docs/images/* — one SVG→PNG per key idea)
+   README.md (+ the diagrams dir — one SVG→PNG per key idea)
 ```
 
 `doc-gen-readme` opens with a mandatory **WebSearch** step so the structure tracks current
@@ -45,7 +45,7 @@ No producer ships without a review covering its output.
 
 ## Project-specific values
 
-The images dir, the diagram policy (SVG source → PNG), and the README output path are
+The diagrams dir, the diagram policy (SVG source → PNG), and the README output path are
 **not** owned by the `doc-*` commands — they resolve from
 `.claude/rules/project-profile.md`. The values a command shows are the defaults; change
 them in the profile, not the command.

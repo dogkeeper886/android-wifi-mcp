@@ -60,7 +60,7 @@ This writes the README only. It does NOT open a PR.
         │
         ├─► Step 4: Diagrams — one SVG → PNG per key idea (required for the lead set)
         │   - For EACH key idea named in Step 2 (the focused ≈3), author its OWN SVG file
-        │     in the images dir (the editable source) and render each to its OWN PNG;
+        │     in the diagrams dir (the editable source) and render each to its OWN PNG;
         │     embed each PNG beside the idea it explains. One idea → one .svg → one .png.
         │   - Make the render reproducible (a script / make target), not hand-exported.
         │   - Mirror any existing ASCII diagrams in docs/ so the picture matches reality.
@@ -87,7 +87,7 @@ This writes the README only. It does NOT open a PR.
     1. WebSearch "README best practices <year> structure badges diagrams"
     2. Study repo → key ideas: <A>, <B>, <C>
     3. Draft structure; one diagram per key idea (A, B, C)
-    4. Author docs/images/{A,B,C}.svg → render each to PNG (one per key idea, reproducible)
+    4. Author {A,B,C}.svg in the diagrams dir → render each to PNG (one per key idea)
     5. Write README.md; verify tool names / env vars / links against the code
     6. Hand off → /doc-review-readme
 
@@ -95,7 +95,7 @@ This writes the README only. It does NOT open a PR.
 
 ## API Notes
 
-- Reads the repo + the web; writes README.md (+ docs/images/* if diagrams). No PR.
+- Reads the repo + the web; writes README.md (+ the diagrams dir if diagrams). No PR.
 - The WebSearch step is mandatory — it is what keeps this command from going stale.
 - One SVG → PNG diagram per key idea; the SVG is the source of truth and the PNG is
   rendered (diagram policy resolves from project-profile → Docs & diagrams).

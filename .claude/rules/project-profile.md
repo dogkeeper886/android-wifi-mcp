@@ -29,7 +29,7 @@ a general unit. Lists → here; procedures → a project skill. This is the rule
 
 - stories dir: `docs/stories/`
 - tests dir: `docs/tests/`
-- images dir: `docs/images/`
+- diagrams dir: `docs/images/` (SVG source + rendered PNG, side by side)
 - story format contract: `docs/stories/README.md`
 - test format contract: `docs/tests/README.md`
 
@@ -67,13 +67,15 @@ project's choice.
 
 - test-doc layout: per-story subfolder `docs/tests/STORY-XXX/TS-NN-<slug>.md` — `TS-NN` restarts per story; ad-hoc tests → `docs/tests/<subject>/TS-NN-<slug>.md`
 - front-matter fields: `id, title, namespace, story, plan, issue, status`
+- drift anchor: `none` — no stored hash. Drift is the derived tool -> doc -> script ->
+  workflow chain check (`qw-drift`), which a revert trips by breaking a link (#181).
 - default status: `green`
 
 ## Docs & diagrams
 
 - README output: `README.md`
 - diagram policy: one diagram per key idea — each its own SVG source committed + rendered to PNG (no Mermaid / inline diagram blocks)
-- images dir: `docs/images/` (also under Paths)
+- diagrams dir: `docs/images/` (SVG source + rendered PNG, side by side) — also under Paths
 
 ## Review semantics
 

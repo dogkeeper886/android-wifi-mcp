@@ -32,7 +32,7 @@ Fits in the qa-workflow:
         │
         ├─► Step 2: One file per scenario
         │   - Create docs/tests/TS-NN-<slug>.md with front-matter:
-        │       id, title, namespace, story,
+        │       id, title, namespace, story (+ the drift anchor the profile declares),
         │       plan: <plan> (the test-plan issue number — omit when there is none),
         │       issue, status: green
         │   - (Format and field meanings: docs/tests/README.md.)
@@ -55,6 +55,9 @@ Fits in the qa-workflow:
 
 - Reuse is optional: if the project has a reuse index, query it for a vetted case or
   step before authoring a near-duplicate, so coverage converges instead of duplicating.
+- Drift anchor: record whatever the profile declares, so a later gate can tell the story
+  has moved (default: `story_hash`, the `sha256sum` of the story file). A project that
+  detects drift another way declares that instead — don't assume hashing.
 - `plan`: the `[STORY-XXX] Test Plan` issue number — the scenario source and the trace
   back (see docs/tests/README.md). Absent for ad-hoc tests written without a plan.
 - Producer paired with `/qw-review-cases`.
