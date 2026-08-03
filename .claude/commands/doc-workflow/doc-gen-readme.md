@@ -60,7 +60,7 @@ This writes the README only. It does NOT open a PR.
         │
         ├─► Step 4: Diagrams — one SVG → PNG per key idea (required for the lead set)
         │   - For EACH key idea named in Step 2 (the focused ≈3), author its OWN SVG file
-        │     in the images dir (the editable source) and render each to its OWN PNG;
+        │     in the diagrams dir (the editable source) and render each to its OWN PNG;
         │     embed each PNG beside the idea it explains. One idea → one .svg → one .png.
         │   - Make the render reproducible (a script / make target), not hand-exported.
         │   - Mirror any existing ASCII diagrams in docs/ so the picture matches reality.
