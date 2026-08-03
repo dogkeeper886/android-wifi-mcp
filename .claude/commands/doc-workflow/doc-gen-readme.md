@@ -93,6 +93,15 @@ This writes the README only. It does NOT open a PR.
 
 ---
 
+## OUTPUT
+
+The README, and any diagrams authored with it. Trace carries their paths. Reported per
+`.claude/rules/agent-report.md` — the verdict first, and a section with nothing to
+report says so.
+
+
+---
+
 ## API Notes
 
 - Reads the repo + the web; writes README.md (+ the diagrams dir if diagrams). No PR.

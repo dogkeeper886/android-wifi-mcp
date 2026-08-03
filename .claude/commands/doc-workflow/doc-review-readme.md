@@ -56,6 +56,16 @@ Fits in the doc-workflow:
 
 ---
 
+## OUTPUT
+
+The decision from Step 4, printed — with the findings behind it. Trace carries the
+README and any diagrams reviewed. Reported per
+`.claude/rules/agent-report.md` — the verdict first, and a section with nothing to
+report says so.
+
+
+---
+
 ## API Notes
 
 - Reuses `reviewing-phrasing` + `reviewing-typography` (the human-read doc review) and

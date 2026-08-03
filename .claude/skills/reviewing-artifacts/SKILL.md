@@ -35,10 +35,22 @@ Ask these of any artifact. The artifact's type shifts which ones bite hardest.
    another artifact (could it merge, or go away?).
 2. **Complete.** Does it deliver that job end to end — no missing steps, placeholder
    text, or dead instructions that produce nothing? A reader/agent should be able to act.
+   **Says what it reports?** A unit that ends at a human gate is not complete until it
+   says what it hands that human. Flag one that finishes silently, one that defines a
+   decision it never prints, one that restates the sections of
+   `.claude/rules/agent-report.md` inline instead of resolving to it, and one that
+   invents verdict words outside `project-profile.md` → Reports. A unit deliberately
+   exempt (its output is not a gate) says so — silence is not an exemption.
 3. **Goal, not frozen spec — and no hardcoding.** Does it state intent and leave room
    where room belongs, instead of freezing a "how" that will drift? Flag stale paths or
    filenames, magic values that should be derived, rigid step-by-step where a principle
    would do, and references to tools or layouts that have moved.
+   **Bakes in a mechanism?** Hardest bite of this question. A value `project-profile.md`
+   owns may appear inline as a default (see its "Two wiring styles"), but a *procedure* —
+   how drift is detected, how files are laid out — cannot be overridden by any value, so a
+   project that does it differently must edit the shipped unit. Flag every "compute X this
+   way" or "write it at this path" that the profile cannot redirect; the fix is to state
+   the goal and let the profile or the project's layer name the mechanism.
 4. **Fits the project.** Does it match the project's conventions as declared in
    `project-profile.md` — the **canonical format** (its source of truth) and the **live
    integrations** listed there — rather than a stack it has moved past? Flag coupling to
@@ -89,16 +101,14 @@ Where each type leans:
 
 ## Report
 
-Per artifact, a short verdict and the specific findings — no numeric score.
-
-```
-<artifact path> — PASS | REVISE | CUT
-
-- [Q#] <finding, with line reference> → <smallest fix>
-```
+Report per `.claude/rules/agent-report.md` — the verdict first, findings as a table,
+and a section with nothing to report saying so. The verdict vocabulary is
+`project-profile.md` → Reports. No numeric score. This review also uses
+**CUT**, declared there as the artifact review's own. In this review they mean:
 
 - **PASS** — does its job, fits the project, nothing leaked.
 - **REVISE** — specific, fixable findings (gaps, hardcoding, drift, readability).
 - **CUT** — duplicates another artifact or does nothing useful; propose removal (with approval).
 
-End with the path(s) reviewed and the suggested next step.
+Each finding names the question it came from (`[Q#]`), the line, and the smallest fix.
+Trace carries the path(s) reviewed.

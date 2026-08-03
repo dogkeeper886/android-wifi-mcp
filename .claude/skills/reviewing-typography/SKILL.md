@@ -81,15 +81,12 @@ and watch where their eye snags or stalls; that spot is the finding.
 
 ## Report
 
-Per doc, a short verdict and specific findings — no numeric score.
-
-```
-<doc> — PASS | REVISE
-
-- <what hurts the look, with the location> → <smallest fix>
-```
+Report per `.claude/rules/agent-report.md` — the verdict first, findings as a table,
+and a section with nothing to report saying so. The verdict vocabulary is
+`project-profile.md` → Reports. No numeric score. In this review they mean:
 
 - **PASS** — the eye finds the point; hierarchy and grouping hold.
 - **REVISE** — specific, fixable findings (no hierarchy, fused groups, bold inflation, wall of text).
 
-End with what was reviewed and the suggested next step.
+Each finding names the location of what hurts the look and gives the smallest fix. Trace
+carries the doc(s) reviewed.

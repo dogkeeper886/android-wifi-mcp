@@ -69,15 +69,12 @@ redundant, buried, or missing a hook. That spot is the finding.
 
 ## Report
 
-Per doc, a short verdict and specific findings — no numeric score.
-
-```
-<doc> — PASS | REVISE
-
-- <what hurts the phrasing, quoted> → <smallest fix>
-```
+Report per `.claude/rules/agent-report.md` — the verdict first, findings as a table,
+and a section with nothing to report saying so. The verdict vocabulary is
+`project-profile.md` → Reports. No numeric score. In this review they mean:
 
 - **PASS** — fits its reader, leads with the point, says the right thing.
 - **REVISE** — specific, fixable findings (buried point, padding, wrong register, missing fact).
 
-End with what was reviewed and the suggested next step.
+Each finding quotes what hurts the phrasing and gives the smallest fix. Trace carries
+the doc(s) reviewed.
